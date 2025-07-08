@@ -1,0 +1,206 @@
+"use client";
+
+import { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+
+export default function VerifyPage() {
+  const [otp, setOtp] = useState<string[]>(Array(6).fill(""));
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [verifying, setVerifying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<boolean>(false);
+  const [resendTimer, setResendTimer] = useState<number>(60);
+  const [resendAvailable, setResendAvailable] = useState<boolean>(false);
+  
+  const searchParams = useSearchParams();
+  const email = searchParams.get("email") || "";
+  
+  // Handle input change
+  const handleChange = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return; // Only allow digits
+    
+    const newOtp = [...otp];
+    newOtp[index] = value;
+    setOtp(newOtp);
+    
+    // Auto focus to next input
+    if (value && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  };
+  
+  // Handle key press for backspace
+  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && !otp[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
+  };
+  
+  // Handle paste functionality
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasteData = e.clipboardData.getData("text/plain").trim();
+    
+    if (!/^\d+$/.test(pasteData)) return; // Only allow digits
+    
+    const otpArray = pasteData.slice(0, 6).split("");
+    const newOtp = [...otp];
+    
+    otpArray.forEach((digit, index) => {
+      if (index < 6) newOtp[index] = digit;
+    });
+    
+    setOtp(newOtp);
+    
+    // Focus last filled input or the next empty one
+    const lastFilledIndex = Math.min(otpArray.length, 5);
+    inputRefs.current[lastFilledIndex]?.focus();
+  };
+  
+  // Handle form submission
+  const handleVerify = async () => {
+    const otpString = otp.join("");
+    
+    if (otpString.length !== 6) {
+      setError("Please enter all 6 digits");
+      return;
+    }
+    
+    setVerifying(true);
+    setError(null);
+    
+    try {
+      // Add your verification logic here
+      // const response = await verifyOTP(email, otpString);
+      
+      // Mock successful verification for now
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      setSuccess(true);
+      
+      // Redirect after success
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 2000);
+    } catch (err) {
+      setError("Invalid verification code. Please try again.");
+    } finally {
+      setVerifying(false);
+    }
+  };
+  
+  // Handle resend logic
+  const handleResendOtp = async () => {
+    if (!resendAvailable) return;
+    
+    try {
+      // Add your resend logic here
+      // await resendOTP(email);
+      
+      setResendTimer(60);
+      setResendAvailable(false);
+    } catch (err) {
+      setError("Failed to resend code. Please try again later.");
+    }
+  };
+  
+  // Timer for resend button
+  useEffect(() => {
+    if (resendTimer > 0) {
+      const timer = setTimeout(() => setResendTimer(prev => prev - 1), 1000);
+      return () => clearTimeout(timer);
+    } else {
+      setResendAvailable(true);
+    }
+  }, [resendTimer]);
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 to-white p-4">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8">
+        <div className="text-center mb-8">
+          <h1 className="text-2xl font-bold text-gray-800">Verify Your Account</h1>
+          <p className="text-gray-600 mt-2">
+            We've sent a verification code to<br />
+            <span className="font-medium">{email || "your email address"}</span>
+          </p>
+        </div>
+        
+        {/* OTP Input Fields */}
+        <div className="flex justify-center space-x-3 mb-8">
+          {otp.map((digit, index) => (
+            <input
+              key={index}
+              ref={ref => { inputRefs.current[index] = ref; }}
+              type="text"
+              maxLength={1}
+              value={digit}
+              onChange={(e) => handleChange(index, e.target.value)}
+              onKeyDown={(e) => handleKeyDown(index, e)}
+              onPaste={index === 0 ? handlePaste : undefined}
+              className="w-12 h-14 text-center text-xl font-bold border-2 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+              autoFocus={index === 0}
+            />
+          ))}
+        </div>
+        
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-50 text-red-700 p-3 rounded-lg mb-4 text-center">
+            {error}
+          </div>
+        )}
+        
+        {/* Success Message */}
+        {success && (
+          <div className="bg-green-50 text-green-700 p-3 rounded-lg mb-4 text-center">
+            Verification successful! Redirecting...
+          </div>
+        )}
+        
+        {/* Verify Button */}
+        <button
+          onClick={handleVerify}
+          disabled={verifying || success}
+          className={`w-full py-3 rounded-lg font-medium text-white ${
+            verifying || success 
+              ? "bg-blue-300" 
+              : "bg-blue-600 hover:bg-blue-700"
+          } transition-colors duration-300`}
+        >
+          {verifying ? (
+            <span className="flex items-center justify-center">
+              <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Verifying...
+            </span>
+          ) : success ? (
+            "Verified!"
+          ) : (
+            "Verify"
+          )}
+        </button>
+        
+        {/* Resend Code Option */}
+        <div className="text-center mt-6">
+          <p className="text-gray-600">
+            Didn't receive a code?{" "}
+            <button
+              onClick={handleResendOtp}
+              disabled={!resendAvailable}
+              className={`font-medium ${
+                resendAvailable 
+                  ? "text-blue-600 hover:text-blue-800" 
+                  : "text-gray-400"
+              } transition-colors`}
+            >
+              {resendAvailable 
+                ? "Resend code" 
+                : `Resend in ${resendTimer}s`}
+            </button>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

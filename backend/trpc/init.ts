@@ -1,15 +1,16 @@
 import { initTRPC , TRPCError} from '@trpc/server';
 import superjson from 'superjson';
 import { ZodError } from 'zod';
+import dbConnect from '../lib/mongo';
+import { getUserfromSession } from '../auth/session';
 
 
 export const createContext = async () => {
-  const authenticatedUser = {
-    username: 'testUser',
-    id: '12345',
-  } 
+  const db = await dbConnect();
+  const authenticatedUser = await getUserfromSession();
  
   return {
+    db,
     session: authenticatedUser,
   };
 };
@@ -41,7 +42,7 @@ export const publicProcedure = t.procedure;
 
 export const protectedProcedure = t.procedure.use(async (opts) => {
   const { ctx } = opts;
-  if (!ctx.session.id) {
+  if (!ctx.session) {
     throw new TRPCError({ code: 'UNAUTHORIZED' });
   }
   return opts.next({

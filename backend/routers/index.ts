@@ -1,5 +1,6 @@
 import z from "zod";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc/init";
+import { authRouter } from "./auth";
 
 
 export const appRouter = createTRPCRouter({
@@ -20,6 +21,8 @@ export const appRouter = createTRPCRouter({
         await new Promise(resolve => setTimeout(resolve, 5000));
         return { message: "You called a Protected Procedure!",status: "OK" };
     }),
+
+    auth: authRouter,
 });
 
 export type AppRouter = typeof appRouter;
