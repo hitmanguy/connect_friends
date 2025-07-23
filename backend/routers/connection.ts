@@ -1,12 +1,10 @@
-// backend/routers/connection.ts
 import { createTRPCRouter, protectedProcedure } from "../trpc/init";
 import { z } from "zod";
 import { Types } from "mongoose";
 import { Connection } from "../model/connection";
 import { ConnectionLedger } from "../model/connectionLedger";
-import { User, UserType } from "../model/auth";
+import { User } from "../model/auth";
 import { TRPCError } from "@trpc/server";
-import { MicroCircleType } from "../model/microCircle";
 
 export const connectionRouter = createTRPCRouter({
   getConnections: protectedProcedure.query(async ({ ctx }) => {
@@ -14,28 +12,16 @@ export const connectionRouter = createTRPCRouter({
       const hostId = Types.ObjectId.createFromHexString(ctx.user._id);
 
       const connections = await Connection.find({ createdBy: hostId })
-        .populate<{
-          userA: Pick<UserType, "username" | "email" | "profileImage"> & {
-            _id: Types.ObjectId;
-          };
-        }>("userA", "username email profileImage")
-        .populate<{
-          userB: Pick<UserType, "username" | "email" | "profileImage"> & {
-            _id: Types.ObjectId;
-          };
-        }>("userB", "username email profileImage")
-        .populate<{
-          microCircleId: Pick<MicroCircleType, "name" | "color"> & {
-            _id: Types.ObjectId;
-          };
-        }>("microCircleId", "_id name color")
+        .populate("userA", "username email profileImage")
+        .populate("userB", "username email profileImage")
+        .populate("microCircleId", "_id name color")
         .lean();
 
       return {
         code: "OK",
         message: "Connections retrieved successfully",
         connections: connections.map((conn) => ({
-          _id: conn._id.toString(),
+          _id: (conn._id as Types.ObjectId).toString(),
           userA: {
             _id: conn.userA._id.toString(),
             username: conn.userA.username,
@@ -48,13 +34,6 @@ export const connectionRouter = createTRPCRouter({
             email: conn.userB.email,
             profileImage: conn.userB.profileImage,
           },
-          microCircle: conn.microCircleId
-            ? {
-                _id: conn.microCircleId._id.toString(),
-                name: conn.microCircleId.name,
-                color: conn.microCircleId.color,
-              }
-            : null,
           status: conn.status,
           notes: conn.notes,
           createdAt: conn.createdAt,
@@ -68,13 +47,231 @@ export const connectionRouter = createTRPCRouter({
     }
   }),
 
+  createmultipleConnections: protectedProcedure
+    .input(
+      z.object({
+        connections: z.array(
+          z.object({
+            userAId: z.string(),
+            userBId: z.string(),
+            notes: z.string().optional(),
+          })
+        ),
+        skipHostConnections: z.boolean().optional().default(true),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const hostId = Types.ObjectId.createFromHexString(ctx.user._id);
+        const results: Array<{
+          userAId: string;
+          userBId: string;
+          success: boolean;
+          message: string;
+          connectionId: string | null;
+        }> = [];
+        const processedPairs = new Set();
+
+        const allUserIds = [
+          ...new Set(
+            input.connections.flatMap((conn) => [conn.userAId, conn.userBId])
+          ),
+        ].map((id) => new Types.ObjectId(id));
+
+        // Validate all users in a single query
+        const users = (await User.find({
+          _id: { $in: allUserIds },
+          hostId: hostId,
+        }).lean()) as Array<{ _id: Types.ObjectId }>;
+
+        const validUserIds = new Set(users.map((u) => u._id.toString()));
+
+        // Process each connection
+        for (const conn of input.connections) {
+          const userAId = new Types.ObjectId(conn.userAId);
+          const userBId = new Types.ObjectId(conn.userBId);
+
+          const pairKey = [userAId.toString(), userBId.toString()]
+            .sort()
+            .join("_");
+
+          if (processedPairs.has(pairKey)) {
+            results.push({
+              userAId: conn.userAId,
+              userBId: conn.userBId,
+              success: false,
+              message: "Duplicate connection in batch request",
+              connectionId: null,
+            });
+            continue;
+          }
+
+          processedPairs.add(pairKey);
+
+          if (
+            input.skipHostConnections &&
+            (userAId.equals(hostId) || userBId.equals(hostId))
+          ) {
+            results.push({
+              userAId: conn.userAId,
+              userBId: conn.userBId,
+              success: true,
+              message: "Skipped host connection (using implicit host link)",
+              connectionId: null,
+            });
+            continue;
+          }
+
+          // Validate users
+          if (
+            !validUserIds.has(userAId.toString()) ||
+            !validUserIds.has(userBId.toString())
+          ) {
+            results.push({
+              userAId: conn.userAId,
+              userBId: conn.userBId,
+              success: false,
+              message:
+                "One or both users not found or don't belong to this host",
+              connectionId: null,
+            });
+            continue;
+          }
+
+          // Check for existing connection
+          const existingConnection = await Connection.findOne({
+            $or: [
+              { userA: userAId, userB: userBId },
+              { userA: userBId, userB: userAId },
+            ],
+          });
+
+          if (existingConnection) {
+            results.push({
+              userAId: conn.userAId,
+              userBId: conn.userBId,
+              success: false,
+              message: "Connection already exists between these users",
+              connectionId: existingConnection._id.toString(),
+            });
+            continue;
+          }
+
+          // Create connection
+          const connection = new Connection({
+            userA: userAId,
+            userB: userBId,
+            createdBy: hostId,
+            notes: conn.notes,
+          });
+
+          await connection.save();
+
+          results.push({
+            userAId: conn.userAId,
+            userBId: conn.userBId,
+            success: true,
+            message: "Connection created successfully",
+            connectionId: connection._id.toString(),
+          });
+        }
+
+        return {
+          code: "OK",
+          message: `Created ${results.filter((r) => r.success).length}/${
+            input.connections.length
+          } connections`,
+          results,
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to create connections",
+        });
+      }
+    }),
+
+  deletemultipleConnections: protectedProcedure
+    .input(
+      z.object({
+        connectionIds: z.array(z.string()),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const hostId = Types.ObjectId.createFromHexString(ctx.user._id);
+        const connectionIds = input.connectionIds.map(
+          (id) => new Types.ObjectId(id)
+        );
+
+        // Find all connections in one query
+        const connections = (await Connection.find({
+          _id: { $in: connectionIds },
+          createdBy: hostId,
+        }).lean()) as Array<{ _id: Types.ObjectId }>;
+
+        const validConnectionIds = new Set(
+          connections.map((c) => c._id.toString())
+        );
+        const results: Array<{
+          connectionId: string;
+          success: boolean;
+          message: string;
+        }> = [];
+
+        // Process each deletion
+        for (const connId of input.connectionIds) {
+          if (!validConnectionIds.has(connId)) {
+            results.push({
+              connectionId: connId,
+              success: false,
+              message: "Connection not found or unauthorized",
+            });
+            continue;
+          }
+
+          results.push({
+            connectionId: connId,
+            success: true,
+            message: "Connection deleted successfully",
+          });
+        }
+
+        // Delete all valid connections in one operation
+        if (validConnectionIds.size > 0) {
+          await Connection.deleteMany({
+            _id: {
+              $in: Array.from(validConnectionIds).map(
+                (id) => new Types.ObjectId(id)
+              ),
+            },
+          });
+        }
+
+        return {
+          code: "OK",
+          message: `Deleted ${results.filter((r) => r.success).length}/${
+            input.connectionIds.length
+          } connections`,
+          results,
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to delete connections",
+        });
+      }
+    }),
+
   createConnection: protectedProcedure
     .input(
       z.object({
         userAId: z.string(),
         userBId: z.string(),
-        microCircleId: z.string().optional(),
         notes: z.string().optional(),
+        skipHostConnections: z.boolean().optional().default(true),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -82,6 +279,18 @@ export const connectionRouter = createTRPCRouter({
         const hostId = Types.ObjectId.createFromHexString(ctx.user._id);
         const userAId = new Types.ObjectId(input.userAId);
         const userBId = new Types.ObjectId(input.userBId);
+
+        if (
+          input.skipHostConnections &&
+          (userAId.equals(hostId) || userBId.equals(hostId))
+        ) {
+          return {
+            code: "OK",
+            message:
+              "Skipped host connection (using implicit host link instead)",
+            connection: null,
+          };
+        }
 
         // Validate both users exist and belong to this host
         const users = await User.find({
@@ -114,9 +323,6 @@ export const connectionRouter = createTRPCRouter({
           userA: userAId,
           userB: userBId,
           createdBy: hostId,
-          microCircleId: input.microCircleId
-            ? new Types.ObjectId(input.microCircleId)
-            : undefined,
           notes: input.notes,
         });
 
@@ -193,21 +399,9 @@ export const connectionRouter = createTRPCRouter({
         const ledgerEntries = await ConnectionLedger.find({
           initiatorId: hostId,
         })
-          .populate<{
-            userA: Pick<UserType, "username" | "email"> & {
-              _id: Types.ObjectId;
-            };
-          }>("userA", "username email")
-          .populate<{
-            userB: Pick<UserType, "username" | "email"> & {
-              _id: Types.ObjectId;
-            };
-          }>("userB", "username email")
-          .populate<{
-            microCircleId: Pick<MicroCircleType, "name" | "color"> & {
-              _id: Types.ObjectId;
-            };
-          }>("microCircleId", "_id name color")
+          .populate("userA", "username email")
+          .populate("userB", "username email")
+          .populate("microCircleId", "_id name color")
           .sort({ createdAt: -1 })
           .limit(input.limit)
           .skip(input.offset)
@@ -217,31 +411,37 @@ export const connectionRouter = createTRPCRouter({
           code: "OK",
           message: "Ledger retrieved successfully",
           entries: ledgerEntries.map((entry) => ({
-            _id: entry._id.toString(),
+            _id: (entry._id as Types.ObjectId).toString(),
             type: entry.type,
-            userA: {
-              _id: entry.userA._id.toString(),
-              username: entry.userA.username,
-              email: entry.userA.email,
-            },
-            userB: {
-              _id: entry.userB._id.toString(),
-              username: entry.userB.username,
-              email: entry.userB.email,
-            },
-            microCircle: entry.microCircleId
+            userA: entry.userA
               ? {
-                  _id: entry.microCircleId._id.toString(),
-                  name: entry.microCircleId.name,
-                  color: entry.microCircleId.color,
+                  _id: entry.userA._id.toString(),
+                  username: entry.userA.username || "Deleted User",
+                  email: entry.userA.email || "account-deleted@example.com",
                 }
-              : null,
+              : {
+                  _id: "deleted",
+                  username: "Deleted User",
+                  email: "account-deleted@example.com",
+                },
+            userB: entry.userB
+              ? {
+                  _id: entry.userB._id.toString(),
+                  username: entry.userB.username || "Deleted User",
+                  email: entry.userB.email || "account-deleted@example.com",
+                }
+              : {
+                  _id: "deleted",
+                  username: "Deleted User",
+                  email: "account-deleted@example.com",
+                },
             notes: entry.notes,
             metadata: entry.metadata,
             timestamp: entry.createdAt,
           })),
         };
       } catch (error) {
+        console.error("Connection ledger error:", error);
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to fetch connection ledger",

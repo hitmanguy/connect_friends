@@ -79,7 +79,7 @@ export class ChangeStreamService {
 
         try {
           if (change.operationType === "insert") {
-            await this.createInitialHostConnection(change.fullDocument);
+            console.log(`New user created: ${change.fullDocument.username}`);
           }
         } catch (error) {
           console.error("Error processing user change:", error);
@@ -154,32 +154,6 @@ export class ChangeStreamService {
           removedFields: updateDescription.removedFields,
         },
       });
-    }
-  }
-
-  private async createInitialHostConnection(user: any) {
-    if (user.hostId && user.UserRole !== "host") {
-      // Check if connection already exists
-      const existingConnection = await Connection.findOne({
-        $or: [
-          { userA: user.hostId, userB: user._id },
-          { userA: user._id, userB: user.hostId },
-        ],
-      });
-
-      if (!existingConnection) {
-        const connection = new Connection({
-          userA: user.hostId,
-          userB: user._id,
-          createdBy: user.hostId,
-          notes: "Auto-created host connection",
-        });
-
-        await connection.save();
-        console.log(
-          `Auto-created connection between host and new user: ${user.username}`
-        );
-      }
     }
   }
 

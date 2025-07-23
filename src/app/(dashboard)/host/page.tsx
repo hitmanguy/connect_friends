@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import InviteManager from "@/app/_components/InviteManager";
-import ConnectionGraph from "@/app/_components/connectionGraph";
 import MicroCircleManager from "@/app/_components/MicroCircleManager";
 import { trpc } from "../../../../utils/providers/TrpcProviders";
 import {
@@ -20,6 +19,7 @@ import {
   History,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import HubPodGraph from "@/app/_components/connection_Graph";
 
 export default function HostPage() {
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
@@ -56,6 +56,23 @@ export default function HostPage() {
     }
   );
 
+  const createMultipleConnectionsMutation =
+    trpc.connection.createmultipleConnections.useMutation({
+      onSuccess: () => {
+        connectionsQuery.refetch();
+        ledgerQuery.refetch();
+        setSelectedUsers([]);
+      },
+    });
+
+  const deleteMultipleConnectionsMutation =
+    trpc.connection.deletemultipleConnections.useMutation({
+      onSuccess: () => {
+        connectionsQuery.refetch();
+        ledgerQuery.refetch();
+      },
+    });
+
   const handleUserSelect = useCallback(
     (userId: string, isSelected: boolean) => {
       setSelectedUsers((prev) =>
@@ -70,7 +87,6 @@ export default function HostPage() {
       createConnectionMutation.mutate({
         userAId,
         userBId,
-        microCircleId,
       });
     },
     [createConnectionMutation]
@@ -82,11 +98,7 @@ export default function HostPage() {
     // Create connections between all selected users (mesh connection)
     for (let i = 0; i < selectedUsers.length; i++) {
       for (let j = i + 1; j < selectedUsers.length; j++) {
-        handleCreateConnection(
-          selectedUsers[i],
-          selectedUsers[j],
-          selectedMicroCircle || undefined
-        );
+        handleCreateConnection(selectedUsers[i], selectedUsers[j]);
       }
     }
   };
@@ -122,20 +134,23 @@ export default function HostPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      <div className="container mx-auto p-6">
+      <div className="container mx-auto px-2 sm:px-4 md:px-6 py-4 md:py-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4 md:mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1 md:mb-2">
               Connection Platform
             </h1>
-            <p className="text-gray-600">
+            <p className="text-sm md:text-base text-gray-600">
               Manage your community and visualize connections
             </p>
           </div>
 
           <div className="flex items-center gap-4">
-            <Badge variant="default" className="bg-orange-100 text-orange-800">
+            <Badge
+              variant="default"
+              className="bg-orange-100 text-orange-800 whitespace-nowrap"
+            >
               <UserPlus className="h-4 w-4 mr-1" />
               Host: {currentUserQuery.data.user.username}
             </Badge>
@@ -143,7 +158,7 @@ export default function HostPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 mb-4 md:mb-8">
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
@@ -201,19 +216,18 @@ export default function HostPage() {
           </Card>
         </div>
 
-        {/* Connection Controls */}
         {selectedUsers.length > 1 && (
-          <Card className="mb-6 border-blue-200 bg-blue-50">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
+          <Card className="mb-4 md:mb-6 border-blue-200 bg-blue-50">
+            <CardContent className="p-3 md:p-4">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2 md:gap-4">
                   <Badge
                     variant="secondary"
                     className="bg-blue-100 text-blue-800"
                   >
                     {selectedUsers.length} users selected
                   </Badge>
-                  <span className="text-sm text-blue-700">
+                  <span className="text-xs md:text-sm text-blue-700">
                     Ready to create{" "}
                     {(selectedUsers.length * (selectedUsers.length - 1)) / 2}{" "}
                     connections
@@ -223,7 +237,7 @@ export default function HostPage() {
                       <select
                         value={selectedMicroCircle}
                         onChange={(e) => setSelectedMicroCircle(e.target.value)}
-                        className="px-3 py-1 border rounded text-sm"
+                        className="px-2 py-1 md:px-3 md:py-1 border rounded text-sm"
                       >
                         <option value="">No Micro Circle</option>
                         {microCirclesQuery.data.circles.map((circle) => (
@@ -234,23 +248,24 @@ export default function HostPage() {
                       </select>
                     )}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 mt-2 md:mt-0">
                   <Button
                     onClick={handleBatchConnect}
                     disabled={
                       selectedUsers.length < 2 ||
                       createConnectionMutation.isPending
                     }
-                    className="bg-green-600 hover:bg-green-700"
+                    className="bg-green-600 hover:bg-green-700 text-xs md:text-sm"
+                    size="sm"
                   >
                     {createConnectionMutation.isPending ? (
                       <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        <div className="animate-spin rounded-full h-3 w-3 md:h-4 md:w-4 border-b-2 border-white mr-1 md:mr-2"></div>
                         Connecting...
                       </>
                     ) : (
                       <>
-                        <Plus className="h-4 w-4 mr-2" />
+                        <Plus className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
                         Connect Users
                       </>
                     )}
@@ -258,8 +273,10 @@ export default function HostPage() {
                   <Button
                     onClick={() => setSelectedUsers([])}
                     variant="outline"
+                    size="sm"
+                    className="text-xs md:text-sm"
                   >
-                    Clear Selection
+                    Clear
                   </Button>
                 </div>
               </div>
@@ -269,26 +286,26 @@ export default function HostPage() {
 
         {/* Main Content Tabs */}
         <Tabs defaultValue="graph" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full md:grid-cols-5 grid-cols-2 gap-2">
             <TabsTrigger value="graph" className="flex items-center gap-2">
               <Network className="h-4 w-4" />
-              Connection Graph
+              <span className="whitespace-nowrap">Connection Graph</span>
             </TabsTrigger>
             <TabsTrigger value="circles" className="flex items-center gap-2">
               <CircleDot className="h-4 w-4" />
-              Micro Circles
+              <span className="whitespace-nowrap">Micro Circles</span>
             </TabsTrigger>
             <TabsTrigger value="users" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
-              Users
+              <span className="whitespace-nowrap">Users</span>
             </TabsTrigger>
             <TabsTrigger value="invites" className="flex items-center gap-2">
               <UserPlus className="h-4 w-4" />
-              Invites
+              <span className="whitespace-nowrap">Invites</span>
             </TabsTrigger>
             <TabsTrigger value="ledger" className="flex items-center gap-2">
               <History className="h-4 w-4" />
-              Activity Log
+              <span className="whitespace-nowrap">Activity Log</span>
             </TabsTrigger>
           </TabsList>
 
@@ -309,38 +326,32 @@ export default function HostPage() {
                     <span className="ml-2">Loading graph...</span>
                   </div>
                 ) : (
-                  <ConnectionGraph
-                    users={
-                      usersQuery.data || {
-                        code: "",
-                        message: "",
-                        users: [],
-                      }
-                    }
-                    connections={
-                      connectionsQuery.data || {
-                        code: "",
-                        message: "",
-                        connections: [],
-                      }
-                    }
-                    microCircles={
-                      microCirclesQuery.data || {
-                        code: "",
-                        message: "",
-                        circles: [],
-                      }
-                    }
-                    hostUser={currentUserQuery.data.user}
-                    selectedUsers={selectedUsers}
-                    onUserSelect={handleUserSelect}
-                    onConnectionDelete={(id) =>
-                      deleteConnectionMutation.mutate({ connectionId: id })
-                    }
-                    isLoading={
-                      createConnectionMutation.isPending ||
-                      deleteConnectionMutation.isPending
-                    }
+                  <HubPodGraph
+                    host={currentUserQuery.data.user}
+                    users={usersQuery.data?.users || []}
+                    connections={connectionsQuery.data?.connections || []}
+                    microCircles={microCirclesQuery.data?.circles || []}
+                    onCreateConnection={(userAId, userBId) => {
+                      createConnectionMutation.mutate({
+                        userAId,
+                        userBId,
+                      });
+                    }}
+                    onDeleteConnection={(connectionId) => {
+                      deleteConnectionMutation.mutate({
+                        connectionId,
+                      });
+                    }}
+                    onCreateMultipleConnections={(connections) => {
+                      createMultipleConnectionsMutation.mutate({
+                        connections,
+                      });
+                    }}
+                    onDeleteMultipleConnections={(connectionIds) => {
+                      deleteMultipleConnectionsMutation.mutate({
+                        connectionIds,
+                      });
+                    }}
                   />
                 )}
               </CardContent>
@@ -419,13 +430,13 @@ export default function HostPage() {
                     {ledgerQuery.data?.entries?.map((entry) => (
                       <div
                         key={entry._id}
-                        className="flex items-center gap-3 p-3 border rounded-lg"
+                        className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 border rounded-lg"
                       >
                         <Badge
                           variant={
                             entry.type === "CREATED" ? "default" : "destructive"
                           }
-                          className="w-20"
+                          className="w-20 mb-1 sm:mb-0"
                         >
                           {entry.type}
                         </Badge>
@@ -434,11 +445,6 @@ export default function HostPage() {
                             <strong>{entry.userA.username}</strong> ↔{" "}
                             <strong>{entry.userB.username}</strong>
                           </p>
-                          {entry.microCircle && (
-                            <p className="text-xs text-gray-600">
-                              Micro Circle: {entry.microCircle.name}
-                            </p>
-                          )}
                         </div>
                         <span className="text-xs text-gray-500">
                           {new Date(entry.timestamp).toLocaleString()}

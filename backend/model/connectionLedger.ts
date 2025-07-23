@@ -44,7 +44,6 @@ const connectionLedgerSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export const ConnectionLedger = mongoose.model(
-  "ConnectionLedger",
-  connectionLedgerSchema
-);
+export const ConnectionLedger =
+  mongoose.models?.ConnectionLedger ||
+  mongoose.model("ConnectionLedger", connectionLedgerSchema);

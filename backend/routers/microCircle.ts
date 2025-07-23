@@ -12,22 +12,18 @@ export const microCircleRouter = createTRPCRouter({
       const hostId = Types.ObjectId.createFromHexString(ctx.user._id);
 
       const circles = await MicroCircle.find({ hostId: hostId, isActive: true })
-        .populate<{
-          members: (Pick<UserType, "username" | "email" | "profileImage"> & {
-            _id: Types.ObjectId;
-          })[];
-        }>("members", "username email profileImage")
+        .populate("members", "username email profileImage")
         .lean();
 
       return {
         code: "OK",
         message: "Micro circles retrieved successfully",
-        circles: circles.map((circle) => ({
+        circles: circles.map((circle: any) => ({
           _id: circle._id.toString(),
           name: circle.name,
           description: circle.description,
           color: circle.color,
-          members: circle.members.map((member) => ({
+          members: circle.members.map((member: any) => ({
             _id: member._id.toString(),
             username: member.username || "",
             email: member.email || "",
@@ -106,7 +102,6 @@ export const microCircleRouter = createTRPCRouter({
       }
     }),
 
-  // Add/remove members from micro circle
   updateMicroCircleMembers: protectedProcedure
     .input(
       z.object({
@@ -156,7 +151,8 @@ export const microCircleRouter = createTRPCRouter({
             break;
           case "REMOVE":
             circle.members = circle.members.filter(
-              (memberId) => !memberObjectIds.some((id) => id.equals(memberId))
+              (memberId: Types.ObjectId) =>
+                !memberObjectIds.some((id) => id.equals(memberId))
             );
             break;
           case "SET":

@@ -19,8 +19,6 @@ export const userRouter = createTRPCRouter({
         .select("username UserRole _id email profileImage profileImagePublicId")
         .lean();
 
-      console.log("Fetched users:", users);
-
       return {
         code: "OK",
         message:

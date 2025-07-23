@@ -33,5 +33,7 @@ const microCircleSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export const MicroCircle = mongoose.model("MicroCircle", microCircleSchema);
+export const MicroCircle =
+  mongoose.models?.MicroCircle ||
+  mongoose.model("MicroCircle", microCircleSchema);
 export type MicroCircleType = InferSchemaType<typeof microCircleSchema>;

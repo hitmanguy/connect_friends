@@ -345,7 +345,7 @@ const MicroCircleManager: React.FC<MicroCircleManagerProps> = ({
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    {circle.members.slice(0, 6).map((member) => (
+                    {circle.members.slice(0, 6).map((member: User) => (
                       <div
                         key={member._id}
                         className="flex items-center gap-2 bg-gray-100 rounded-full px-2 py-1"
