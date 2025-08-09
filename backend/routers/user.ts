@@ -12,7 +12,6 @@ import { deleteCloudinaryImage, uploadCloudinary } from "../cloudinary/upload";
 export const userRouter = createTRPCRouter({
   getAllUsers: protectedProcedure.query(async ({ ctx }) => {
     try {
-      console.log("hello");
       const hostObjectId = Types.ObjectId.createFromHexString(ctx.user._id);
 
       const users = await User.find({ hostId: hostObjectId })
@@ -57,8 +56,6 @@ export const userRouter = createTRPCRouter({
           profileImage: result.secure_url,
           profileImagePublicId: result.public_id,
         });
-
-        console.log("Image uploaded successfully:", result);
 
         return {
           code: "OK",

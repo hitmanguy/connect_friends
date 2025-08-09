@@ -324,7 +324,6 @@ export const authRouter = createTRPCRouter({
           message: "Only hosts can create invites",
         });
       }
-      console.log("Creating invite for user:", ctx.user._id);
       const { expiresAt } = input;
       try {
         const invite = await createInvite(ctx.user._id, expiresAt);

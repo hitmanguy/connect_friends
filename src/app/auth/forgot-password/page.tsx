@@ -46,7 +46,6 @@ export default function ForgotPasswordPage() {
 
     try {
       const baseurl = window.location.origin;
-      console.log(baseurl);
 
       await sendPassEmailMutation.mutateAsync({
         email: email.trim(),

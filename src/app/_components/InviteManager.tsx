@@ -51,7 +51,6 @@ export default function InviteManager({
 
   const createInvite = trpc.auth.createInvite.useMutation({
     onSuccess: (data) => {
-      console.log("Invite created:", data);
       setExpiresAt("1 day");
       getInvites.refetch();
     },

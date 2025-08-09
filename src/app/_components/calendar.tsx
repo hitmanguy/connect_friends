@@ -290,7 +290,6 @@ export default function MoodCalendar({
   };
 
   function mapEntryToViewFormat(entry: MoodEntry) {
-    console.log("Mapping entry:", entry);
     return {
       _id: entry._id,
       date: entry.date,

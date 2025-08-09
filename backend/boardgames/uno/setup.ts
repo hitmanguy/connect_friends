@@ -812,10 +812,6 @@ export const UnoGame: Game<UnoGameState> = {
       if (G.winner) {
         scores[G.winner] = totalScore;
       }
-
-      console.log("Final scores:", scores);
-      console.log("Game log:", G.gameLog);
-      console.log("Winner:", G.winner);
     } catch (error) {
       console.error("Game end error:", error);
     }

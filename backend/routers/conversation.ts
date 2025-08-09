@@ -25,7 +25,6 @@ async function canSendTo(userId: string, targetId: string, isHost: boolean) {
   const hostIdValue = (
     hostDoc as { hostId?: string } | null
   )?.hostId?.toString();
-  console.log("Host ID:", hostIdValue);
   if (hostIdValue) {
     if (hostIdValue === targetId) return true;
   }

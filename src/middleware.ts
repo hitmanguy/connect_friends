@@ -14,7 +14,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export async function middlewareAuth(request: NextRequest) {
-  console.log("Middleware auth check for:", request.nextUrl.pathname);
   if (request.nextUrl.pathname.startsWith(userRoutes)) {
     const user = await getUserfromSession();
     if (!user) {

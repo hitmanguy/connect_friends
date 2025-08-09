@@ -335,7 +335,6 @@ export default function MoodTrackerPage() {
   const [shareMediaWithAll, setShareMediaWithAll] = useState<boolean>(false);
 
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  console.log("User timezone:", timezone);
 
   const currentUserQuery = trpc.auth.getCurrentUser.useQuery({
     fulluser: true,
@@ -381,10 +380,8 @@ export default function MoodTrackerPage() {
   }, []);
 
   useEffect(() => {
-    console.log("Connections data:", connections);
-
     const handleClick = (e: MouseEvent) => {
-      console.log("Click detected at:", e.clientX, e.clientY);
+      // console.log("Click detected at:", e.clientX, e.clientY);
     };
 
     document.addEventListener("click", handleClick);
@@ -610,7 +607,6 @@ export default function MoodTrackerPage() {
   );
 
   const toggleConnectionCustomize = useCallback((connectionId: string) => {
-    console.log("Toggle customize for connection:", connectionId);
     setCustomizeConnections((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(connectionId)) {
@@ -623,7 +619,6 @@ export default function MoodTrackerPage() {
   }, []);
 
   const toggleCircleCustomize = useCallback((circleId: string) => {
-    console.log("Toggle customize for circle:", circleId);
     setCustomizeCircles((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(circleId)) {
@@ -637,8 +632,6 @@ export default function MoodTrackerPage() {
 
   const toggleConnectionShare = useCallback(
     (connectionId: string) => {
-      console.log("Toggle connection clicked:", connectionId);
-
       setPendingClicks((prev) => {
         const newSet = new Set(prev);
         newSet.add(`conn-${connectionId}`);
@@ -669,8 +662,6 @@ export default function MoodTrackerPage() {
           });
         } else {
           const allMediaIds = prev.media.map((media) => media.id);
-
-          console.log("Adding connection with media IDs:", allMediaIds);
 
           newSharing = {
             ...prev.sharing,
@@ -1164,13 +1155,6 @@ export default function MoodTrackerPage() {
 
   if (alreadySubmittedToday) {
     let todayMood = todayMoodQuery.data?.entry;
-    console.log("Today's mood data structure check:", {
-      mood: todayMood?.mood,
-      hasActivities: Array.isArray(todayMood?.activities),
-      activitiesLength: todayMood?.activities?.length,
-      hasNotes: Boolean(todayMood?.notes),
-      hasMedia: Array.isArray(todayMood?.media) && todayMood?.media.length > 0,
-    });
 
     return (
       <ViewMoodEntry

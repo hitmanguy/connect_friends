@@ -27,7 +27,6 @@ export default function InvitePage() {
 
   const registerMutation = trpc.auth.register.useMutation({
     onSuccess: (data) => {
-      console.log("Registration successful:", data);
       router.push(`/verify/${data.token}`);
     },
     onError: (error) => {

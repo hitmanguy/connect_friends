@@ -394,7 +394,6 @@ export const boardgamesRouter = createTRPCRouter({
         exists.username = userObj?.username ?? exists.username;
         exists.avatarUrl = userObj?.profileImage || exists.avatarUrl;
       }
-      console.log(doc);
       await doc.save();
       await loadRoomFromDB(doc.id);
       return { gameRoom: doc.toObject() as IGameRoom };

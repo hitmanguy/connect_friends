@@ -26,7 +26,6 @@ export async function getUserfromSession() {
   if (!sessionCookie) {
     return null;
   }
-  console.log("Fetching session from Redis for:");
   const userData = await getUserSessionbyId(sessionCookie);
   return userData;
 }
