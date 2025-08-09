@@ -117,7 +117,6 @@ export default function InviteManager({
 
   return (
     <div className={className}>
-      {/* Create Invite Form */}
       {showCreateForm && (
         <div className="max-w-md mb-8">
           <Card>
@@ -171,7 +170,6 @@ export default function InviteManager({
         </div>
       )}
 
-      {/* Invites Grid */}
       <div>
         <h2 className="text-xl font-semibold mb-6">Your Invites</h2>
 
@@ -230,7 +228,6 @@ export default function InviteManager({
                             : "Active"}
                         </Badge>
 
-                        {/* Delete Button */}
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button
@@ -270,11 +267,8 @@ export default function InviteManager({
                     </div>
                   </CardHeader>
 
-                  {/* Card Content */}
                   <CardContent className="space-y-4 pt-0">
-                    {/* Stats Row */}
                     <div className="grid grid-cols-1 gap-3">
-                      {/* Users Count */}
                       <div className="flex items-center gap-2">
                         <Users className="h-4 w-4 text-blue-600 flex-shrink-0" />
                         <span className="text-sm">
@@ -282,7 +276,6 @@ export default function InviteManager({
                         </span>
                       </div>
 
-                      {/* Expiry Date */}
                       <div className="flex items-center gap-2">
                         <Calendar className="h-4 w-4 text-green-600 flex-shrink-0" />
                         <span className="text-sm">
@@ -291,7 +284,6 @@ export default function InviteManager({
                       </div>
                     </div>
 
-                    {/* Invite Link Section */}
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <Link className="h-4 w-4 text-purple-600 flex-shrink-0" />
@@ -300,7 +292,6 @@ export default function InviteManager({
                         </span>
                       </div>
 
-                      {/* Link Display and Copy Button */}
                       <div className="space-y-2">
                         <div className="p-2 bg-gray-50 rounded border">
                           <code className="text-xs break-all text-gray-700">
@@ -326,7 +317,6 @@ export default function InviteManager({
                       </div>
                     </div>
 
-                    {/* Created Date */}
                     <div className="text-xs text-gray-500 pt-3 border-t">
                       Created:{" "}
                       {new Date(mappedInvite.createdAt).toLocaleDateString()}

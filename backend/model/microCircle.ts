@@ -12,7 +12,7 @@ const microCircleSchema = new mongoose.Schema(
     },
     color: {
       type: String,
-      default: "#3b82f6", // Default blue
+      default: "#3b82f6",
     },
     hostId: {
       type: mongoose.Schema.Types.ObjectId,

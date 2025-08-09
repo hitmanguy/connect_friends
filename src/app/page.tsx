@@ -17,7 +17,7 @@ import { trpc } from "../../utils/providers/TrpcProviders";
 import Loading from "./loading";
 import { redirect } from "next/navigation";
 import FigmaBackground from "./_components/figmabg";
-import { promise } from "zod";
+import { CharLimitInfo } from "./_components/char_limit";
 
 export default function Home() {
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
@@ -46,6 +46,11 @@ export default function Home() {
       retry: false,
     }
   );
+
+  const hostCountQ = trpc.user.hostCount.useQuery(undefined, {
+    refetchOnWindowFocus: false,
+  });
+  const hostLimitReached = (hostCountQ.data?.count ?? 0) >= 1;
 
   useEffect(() => {
     if (LoginData.isError) {
@@ -97,13 +102,17 @@ export default function Home() {
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Login data:", loginForm);
     LoginData.mutate({ email: loginForm.email, password: loginForm.password });
   };
 
   const handleRegisterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Register data:", registerForm);
+    if (hostLimitReached) {
+      setErrorMessage(
+        "For personal use, the host limit for this website is only 1 and hence you can't register as host. For further concerns, contact at hitmanguy@gmail.com"
+      );
+      return;
+    }
     RegisterData.mutate({
       username: registerForm.name,
       email: registerForm.email,
@@ -123,6 +132,9 @@ export default function Home() {
       console.error("OAuth login error:", error);
       setErrorMessage("Failed to initialize Google login");
     }
+  };
+  const handleForgotPassword = () => {
+    redirect("/auth/forgot-password");
   };
 
   if (data.isLoading || CurrentUser.isLoading) {
@@ -220,7 +232,7 @@ export default function Home() {
                         className="p-0 h-auto text-xs text-blue-500"
                         type="button"
                         onClick={() => {
-                          /* Handle forgot password */
+                          handleForgotPassword();
                         }}
                       >
                         Forgot password?
@@ -285,65 +297,87 @@ export default function Home() {
                   </Button>
                 </form>
               ) : (
-                <form
-                  onSubmit={handleRegisterSubmit}
-                  className={`space-y-4 transition-all duration-300 ${
-                    authMode === "register"
-                      ? "animate-slide-in-right"
-                      : "absolute inset-0 opacity-0 pointer-events-none"
-                  }`}
-                >
-                  {/* Host badge remains the same */}
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Your Name</Label>
-                    <Input
-                      id="name"
-                      placeholder="John Doe"
-                      value={registerForm.name}
-                      onChange={handleRegisterChange}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      placeholder="your@email.com"
-                      value={registerForm.email}
-                      onChange={handleRegisterChange}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      value={registerForm.password}
-                      onChange={handleRegisterChange}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">Confirm Password</Label>
-                    <Input
-                      id="confirmPassword"
-                      type="password"
-                      value={registerForm.confirmPassword}
-                      onChange={handleRegisterChange}
-                      required
-                    />
-                  </div>
-                  <Button
-                    type="submit"
-                    className="w-full bg-blue-500 hover:bg-blue-600"
+                <div className="relative">
+                  <form
+                    onSubmit={handleRegisterSubmit}
+                    className={`space-y-4 transition-all duration-300 ${
+                      authMode === "register"
+                        ? "animate-slide-in-right"
+                        : "absolute inset-0 opacity-0 pointer-events-none"
+                    } ${
+                      hostLimitReached ? "opacity-60 pointer-events-none" : ""
+                    }`}
+                    aria-disabled={hostLimitReached}
                   >
-                    Create Host Account
-                  </Button>
-                  <p className="text-xs text-center text-muted-foreground mt-2">
-                    After registration, you'll be able to invite friends
-                  </p>
-                </form>
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Your Name</Label>
+                      <Input
+                        id="name"
+                        placeholder="John Doe"
+                        value={registerForm.name}
+                        onChange={handleRegisterChange}
+                        required
+                        disabled={hostLimitReached}
+                      />
+                      <CharLimitInfo value={registerForm.name} limit={100} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        placeholder="your@email.com"
+                        value={registerForm.email}
+                        onChange={handleRegisterChange}
+                        required
+                        disabled={hostLimitReached}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="password">Password</Label>
+                      <Input
+                        id="password"
+                        type="password"
+                        value={registerForm.password}
+                        onChange={handleRegisterChange}
+                        required
+                        disabled={hostLimitReached}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirmPassword">Confirm Password</Label>
+                      <Input
+                        id="confirmPassword"
+                        type="password"
+                        value={registerForm.confirmPassword}
+                        onChange={handleRegisterChange}
+                        required
+                        disabled={hostLimitReached}
+                      />
+                    </div>
+                    <Button
+                      type="submit"
+                      className="w-full bg-blue-500 hover:bg-blue-600"
+                      disabled={hostLimitReached}
+                    >
+                      Create Host Account
+                    </Button>
+                    <p className="text-xs text-center text-muted-foreground mt-2">
+                      After registration, you'll be able to invite friends
+                    </p>
+                  </form>
+
+                  {hostLimitReached && (
+                    <div className="host-block-overlay rounded-lg">
+                      <div className="max-w-sm text-center rounded-xl border-2 border-red-300 bg-white/90 px-4 py-3 shadow-lg">
+                        <p className="text-sm text-red-700 font-medium">
+                          For personal use, the host limit for this website is
+                          only 1 and hence you can’t register as host. For
+                          further concerns, contact at hitmanguy@gmail.com
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </CardContent>
             <CardFooter className="flex justify-center border-t pt-4">
@@ -356,6 +390,55 @@ export default function Home() {
           </Card>
         </div>
       </div>
+
+      <style jsx>{`
+        .host-block-overlay {
+          position: absolute;
+          inset: 0;
+          z-index: 10;
+          display: grid;
+          place-items: center;
+          pointer-events: auto;
+          background: repeating-linear-gradient(
+            -45deg,
+            rgba(239, 68, 68, 0.12) 0px,
+            rgba(239, 68, 68, 0.12) 16px,
+            rgba(239, 68, 68, 0.22) 16px,
+            rgba(239, 68, 68, 0.22) 32px
+          );
+          animation: stripeMove 12s linear infinite;
+          backdrop-filter: blur(1px);
+        }
+        .host-block-overlay::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(
+            to bottom,
+            transparent 0%,
+            rgba(255, 255, 255, 0.9) 50%,
+            transparent 100%
+          );
+          opacity: 0.18;
+          animation: scan 3s linear infinite;
+        }
+        @keyframes stripeMove {
+          0% {
+            background-position: 0 0;
+          }
+          100% {
+            background-position: 200px 0;
+          }
+        }
+        @keyframes scan {
+          0% {
+            transform: translateY(-100%);
+          }
+          100% {
+            transform: translateY(100%);
+          }
+        }
+      `}</style>
     </>
   );
 }

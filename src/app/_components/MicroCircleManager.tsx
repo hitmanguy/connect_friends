@@ -24,6 +24,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { trpc } from "../../../utils/providers/TrpcProviders";
 import {
   CircleDot,
@@ -31,16 +41,17 @@ import {
   Edit3,
   Trash2,
   Users,
-  Palette,
   UserPlus,
-  UserMinus,
+  AlertTriangle,
+  Search,
+  X,
 } from "lucide-react";
+import { CharLimitInfo } from "./char_limit";
 
 interface User {
   _id: string;
   username?: string;
   email: string;
-  UserRole: string;
   profileImage?: string;
 }
 
@@ -49,7 +60,6 @@ interface MicroCircleManagerProps {
   onRefresh: () => void;
 }
 
-// Color palette for micro circles
 const CIRCLE_COLORS = [
   "#3b82f6", // Blue
   "#10b981", // Green
@@ -71,16 +81,16 @@ const MicroCircleManager: React.FC<MicroCircleManagerProps> = ({
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingCircle, setEditingCircle] = useState<any>(null);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [circleToDelete, setCircleToDelete] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  // Form states
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [color, setColor] = useState(CIRCLE_COLORS[0]);
 
-  // Queries
   const microCirclesQuery = trpc.microCircle.getMicroCircles.useQuery();
 
-  // Mutations
   const createMutation = trpc.microCircle.createMicroCircle.useMutation({
     onSuccess: () => {
       microCirclesQuery.refetch();
@@ -99,6 +109,15 @@ const MicroCircleManager: React.FC<MicroCircleManagerProps> = ({
         setEditingCircle(null);
       },
     });
+
+  const deleteMutation = trpc.microCircle.deleteMicroCircle.useMutation({
+    onSuccess: () => {
+      microCirclesQuery.refetch();
+      onRefresh();
+      setIsDeleteDialogOpen(false);
+      setCircleToDelete(null);
+    },
+  });
 
   const resetForm = () => {
     setName("");
@@ -121,11 +140,19 @@ const MicroCircleManager: React.FC<MicroCircleManagerProps> = ({
   const handleEditMembers = (circle: any) => {
     setEditingCircle(circle);
     setSelectedMembers(circle.members.map((m: any) => m._id));
+    setSearchQuery("");
     setIsEditDialogOpen(true);
   };
 
   const handleUpdateMembers = () => {
     if (!editingCircle) return;
+
+    if (selectedMembers.length === 0) {
+      setIsEditDialogOpen(false);
+      setCircleToDelete(editingCircle);
+      setIsDeleteDialogOpen(true);
+      return;
+    }
 
     updateMembersMutation.mutate({
       circleId: editingCircle._id,
@@ -134,22 +161,57 @@ const MicroCircleManager: React.FC<MicroCircleManagerProps> = ({
     });
   };
 
+  const handleDeleteConfirm = () => {
+    if (!circleToDelete) return;
+
+    deleteMutation.mutate({
+      circleId: circleToDelete._id,
+    });
+  };
+
+  const openDeleteDialog = (circle: any) => {
+    setCircleToDelete(circle);
+    setIsDeleteDialogOpen(true);
+  };
+
   const handleMemberToggle = (userId: string, isChecked: boolean) => {
     setSelectedMembers((prev) =>
       isChecked ? [...prev, userId] : prev.filter((id) => id !== userId)
     );
   };
 
+  const resetSearch = () => {
+    setSearchQuery("");
+  };
+
+  const filteredUsers = (users || []).filter((user) => {
+    if (!searchQuery.trim()) return true;
+
+    const query = searchQuery.toLowerCase();
+    const username = (user.username || "").toLowerCase();
+    const email = (user.email || "").toLowerCase();
+
+    return username.includes(query) || email.includes(query);
+  });
+
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Micro Circles</h2>
           <p className="text-gray-600">Organize users into groups and teams</p>
         </div>
 
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <Dialog
+          open={isCreateDialogOpen}
+          onOpenChange={(open) => {
+            setIsCreateDialogOpen(open);
+            if (!open) {
+              resetForm();
+              resetSearch();
+            }
+          }}
+        >
           <DialogTrigger asChild>
             <Button className="bg-purple-600 hover:bg-purple-700">
               <Plus className="h-4 w-4 mr-2" />
@@ -162,7 +224,6 @@ const MicroCircleManager: React.FC<MicroCircleManagerProps> = ({
             </DialogHeader>
 
             <div className="space-y-6">
-              {/* Basic Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Circle Name *</Label>
@@ -173,6 +234,7 @@ const MicroCircleManager: React.FC<MicroCircleManagerProps> = ({
                     placeholder="e.g., Design Team, Friends"
                     maxLength={50}
                   />
+                  <CharLimitInfo value={name} limit={50} />
                 </div>
 
                 <div className="space-y-2">
@@ -215,43 +277,73 @@ const MicroCircleManager: React.FC<MicroCircleManagerProps> = ({
                   placeholder="Brief description of this micro circle..."
                   maxLength={200}
                 />
+                <CharLimitInfo value={description} limit={200} />
               </div>
 
-              {/* Member Selection */}
               <div className="space-y-3">
                 <Label>Select Members</Label>
+
+                <div className="relative">
+                  <Input
+                    type="text"
+                    placeholder="Search users..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8 mb-2"
+                  />
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+                  {searchQuery && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-1 top-1 h-8 w-8 p-0"
+                      onClick={() => setSearchQuery("")}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+
                 <div className="max-h-60 overflow-y-auto border rounded-lg p-3 space-y-2">
-                  {users.map((user) => (
-                    <div key={user._id} className="flex items-center space-x-3">
-                      <Checkbox
-                        id={`member-${user._id}`}
-                        checked={selectedMembers.includes(user._id)}
-                        onCheckedChange={(checked) =>
-                          handleMemberToggle(user._id, checked as boolean)
-                        }
-                      />
-                      <Avatar className="w-8 h-8">
-                        <AvatarImage
-                          src={user.profileImage}
-                          alt={user.username}
-                        />
-                        <AvatarFallback className="text-xs">
-                          {user.username?.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{user.username}</p>
-                        <p className="text-xs text-gray-500">{user.email}</p>
-                      </div>
+                  {filteredUsers.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      No users found matching "{searchQuery}"
                     </div>
-                  ))}
+                  ) : (
+                    filteredUsers.map((user) => (
+                      <div
+                        key={user._id}
+                        className="flex items-center space-x-3"
+                      >
+                        <Checkbox
+                          id={`member-${user._id}`}
+                          checked={selectedMembers.includes(user._id)}
+                          onCheckedChange={(checked) =>
+                            handleMemberToggle(user._id, checked as boolean)
+                          }
+                        />
+                        <Avatar className="w-8 h-8">
+                          <AvatarImage
+                            src={user.profileImage}
+                            alt={user.username}
+                          />
+                          <AvatarFallback className="text-xs">
+                            {user.username?.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">{user.username}</p>
+                          <p className="text-xs text-gray-500">{user.email}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
                 <p className="text-xs text-gray-500">
                   {selectedMembers.length} member(s) selected
                 </p>
               </div>
 
-              {/* Actions */}
               <div className="flex justify-end gap-3">
                 <Button
                   variant="outline"
@@ -284,7 +376,6 @@ const MicroCircleManager: React.FC<MicroCircleManagerProps> = ({
         </Dialog>
       </div>
 
-      {/* Micro Circles Grid */}
       {microCirclesQuery.isLoading ? (
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
@@ -337,7 +428,6 @@ const MicroCircleManager: React.FC<MicroCircleManagerProps> = ({
               </CardHeader>
 
               <CardContent className="space-y-4">
-                {/* Members Preview */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <Users className="h-4 w-4 text-gray-500" />
@@ -374,7 +464,6 @@ const MicroCircleManager: React.FC<MicroCircleManagerProps> = ({
                   </div>
                 </div>
 
-                {/* Actions */}
                 <div className="flex gap-2 pt-2">
                   <Button
                     variant="outline"
@@ -385,6 +474,14 @@ const MicroCircleManager: React.FC<MicroCircleManagerProps> = ({
                     <Edit3 className="h-4 w-4 mr-1" />
                     Edit Members
                   </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 border-red-200 hover:bg-red-50"
+                    onClick={() => openDeleteDialog(circle)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -392,8 +489,16 @@ const MicroCircleManager: React.FC<MicroCircleManagerProps> = ({
         </div>
       )}
 
-      {/* Edit Members Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      <Dialog
+        open={isEditDialogOpen}
+        onOpenChange={(open) => {
+          setIsEditDialogOpen(open);
+          if (!open) {
+            setEditingCircle(null);
+            resetSearch();
+          }
+        }}
+      >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit Members - {editingCircle?.name}</DialogTitle>
@@ -409,69 +514,171 @@ const MicroCircleManager: React.FC<MicroCircleManagerProps> = ({
               <Badge variant="outline">{selectedMembers.length} selected</Badge>
             </div>
 
-            <div className="max-h-80 overflow-y-auto border rounded-lg p-3 space-y-2">
-              {users.map((user) => (
-                <div key={user._id} className="flex items-center space-x-3">
-                  <Checkbox
-                    id={`edit-member-${user._id}`}
-                    checked={selectedMembers.includes(user._id)}
-                    onCheckedChange={(checked) =>
-                      handleMemberToggle(user._id, checked as boolean)
-                    }
-                  />
-                  <Avatar className="w-8 h-8">
-                    <AvatarImage src={user.profileImage} alt={user.username} />
-                    <AvatarFallback className="text-xs">
-                      {user.username?.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{user.username}</p>
-                    <p className="text-xs text-gray-500">{user.email}</p>
-                  </div>
-                  {editingCircle?.members?.some(
-                    (m: any) => m._id === user._id
-                  ) && (
-                    <Badge variant="secondary" className="text-xs">
-                      Current
-                    </Badge>
-                  )}
-                </div>
-              ))}
+            {selectedMembers.length === 0 && (
+              <Alert variant="default" className="bg-amber-50 border-amber-200">
+                <AlertTriangle className="h-4 w-4 text-amber-600 mr-2" />
+                <AlertDescription className="text-amber-800">
+                  Removing all members will delete this circle.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <div className="relative mb-2">
+              <Input
+                type="text"
+                placeholder="Search users..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8"
+              />
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+              {searchQuery && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-1 top-1 h-8 w-8 p-0"
+                  onClick={() => setSearchQuery("")}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
             </div>
 
-            <div className="flex justify-end gap-3">
+            <div className="max-h-80 overflow-y-auto border rounded-lg p-3 space-y-2">
+              {filteredUsers.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  No users found matching "{searchQuery}"
+                </div>
+              ) : (
+                filteredUsers.map((user) => (
+                  <div key={user._id} className="flex items-center space-x-3">
+                    <Checkbox
+                      id={`edit-member-${user._id}`}
+                      checked={selectedMembers.includes(user._id)}
+                      onCheckedChange={(checked) =>
+                        handleMemberToggle(user._id, checked as boolean)
+                      }
+                    />
+                    <Avatar className="w-8 h-8">
+                      <AvatarImage
+                        src={user.profileImage}
+                        alt={user.username}
+                      />
+                      <AvatarFallback className="text-xs">
+                        {user.username?.charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{user.username}</p>
+                      <p className="text-xs text-gray-500">{user.email}</p>
+                    </div>
+                    {editingCircle?.members?.some(
+                      (m: any) => m._id === user._id
+                    ) && (
+                      <Badge variant="secondary" className="text-xs">
+                        Current
+                      </Badge>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="flex justify-between gap-3">
               <Button
                 variant="outline"
+                size="sm"
+                className="text-red-600 border-red-200 hover:bg-red-50"
                 onClick={() => {
                   setIsEditDialogOpen(false);
-                  setEditingCircle(null);
+                  openDeleteDialog(editingCircle);
                 }}
               >
-                Cancel
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete Circle
               </Button>
-              <Button
-                onClick={handleUpdateMembers}
-                disabled={updateMembersMutation.isPending}
-              >
-                {updateMembersMutation.isPending ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                    Updating...
-                  </>
-                ) : (
-                  <>
-                    <UserPlus className="h-4 w-4 mr-2" />
-                    Update Members
-                  </>
-                )}
-              </Button>
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsEditDialogOpen(false);
+                    setEditingCircle(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleUpdateMembers}
+                  disabled={updateMembersMutation.isPending}
+                  className={
+                    selectedMembers.length === 0
+                      ? "bg-red-600 hover:bg-red-700"
+                      : ""
+                  }
+                >
+                  {updateMembersMutation.isPending ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                      Updating...
+                    </>
+                  ) : selectedMembers.length === 0 ? (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete Circle
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Update Members
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Error Alerts */}
+      <AlertDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Micro Circle</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete{" "}
+              <span className="font-medium">{circleToDelete?.name}</span>? This
+              action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                setIsDeleteDialogOpen(false);
+                setCircleToDelete(null);
+              }}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleteMutation.isPending ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                  Deleting...
+                </>
+              ) : (
+                <>Delete</>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {createMutation.isError && (
         <Alert variant="destructive">
           <AlertDescription>
@@ -484,6 +691,14 @@ const MicroCircleManager: React.FC<MicroCircleManagerProps> = ({
         <Alert variant="destructive">
           <AlertDescription>
             Failed to update members: {updateMembersMutation.error.message}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {deleteMutation.isError && (
+        <Alert variant="destructive">
+          <AlertDescription>
+            Failed to delete micro circle: {deleteMutation.error.message}
           </AlertDescription>
         </Alert>
       )}

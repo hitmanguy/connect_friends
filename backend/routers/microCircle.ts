@@ -1,9 +1,8 @@
-// backend/routers/microCircle.ts
 import { createTRPCRouter, protectedProcedure } from "../trpc/init";
 import { z } from "zod";
 import { Types } from "mongoose";
 import { MicroCircle } from "../model/microCircle";
-import { User, UserType } from "../model/auth";
+import { User } from "../model/auth";
 import { TRPCError } from "@trpc/server";
 
 export const microCircleRouter = createTRPCRouter({
@@ -55,17 +54,37 @@ export const microCircleRouter = createTRPCRouter({
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        const hostId = Types.ObjectId.createFromHexString(ctx.user._id);
+        const userId = Types.ObjectId.createFromHexString(ctx.user._id);
+        let hostId = userId;
+        if (ctx.user.UserRole !== "host") {
+          const hostObj = await User.findById(userId, "hostId");
+          if (!hostObj || !hostObj.hostId) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "The user doesnt have any host, hence an invalid user",
+            });
+          }
+          const hostcheck = await User.findById(hostObj.hostId, "UserRole");
+          if (!hostcheck || hostcheck.UserRole !== "host") {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "The host of this user is not a valid host",
+            });
+          }
+          hostId = hostObj.hostId;
+        }
 
         const memberObjectIds = input.memberIds.map(
           (id) => new Types.ObjectId(id)
         );
+
+        const nonHost = memberObjectIds.filter((id) => !id.equals(hostId));
         const validMembers = await User.find({
-          _id: { $in: memberObjectIds },
+          _id: { $in: nonHost },
           hostId: hostId,
         });
 
-        if (validMembers.length !== memberObjectIds.length) {
+        if (validMembers.length !== nonHost.length) {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "Some member IDs are invalid or don't belong to this host",
@@ -76,7 +95,7 @@ export const microCircleRouter = createTRPCRouter({
           name: input.name,
           description: input.description,
           color: input.color,
-          hostId: hostId,
+          hostId: userId,
           members: memberObjectIds,
         });
 
@@ -172,6 +191,39 @@ export const microCircleRouter = createTRPCRouter({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to update micro circle members",
+        });
+      }
+    }),
+
+  deleteMicroCircle: protectedProcedure
+    .input(z.object({ circleId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const hostId = Types.ObjectId.createFromHexString(ctx.user._id);
+        const circleId = new Types.ObjectId(input.circleId);
+
+        const circle = await MicroCircle.findOneAndDelete({
+          _id: circleId,
+          hostId: hostId,
+          isActive: true,
+        });
+
+        if (!circle) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Micro circle not found",
+          });
+        }
+
+        return {
+          code: "OK",
+          message: "Micro circle deleted successfully",
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to delete micro circle",
         });
       }
     }),

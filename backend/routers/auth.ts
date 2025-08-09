@@ -23,6 +23,12 @@ import { cookies } from "next/headers";
 import { getOAuthClient } from "../auth/oauth/base";
 import { createInvite } from "../auth/invite";
 import { Invite } from "../model/invite";
+import {
+  generatePassToken,
+  verifyPassToken,
+  deletePassToken,
+  sendVerificationEmailChangepassword,
+} from "../auth/VerifyPasswordChange";
 
 export const authRouter = createTRPCRouter({
   login: publicProcedure
@@ -268,6 +274,7 @@ export const authRouter = createTRPCRouter({
           code: "OK",
           message: "User retrieved successfully",
           _id: user._id.toString(),
+          role: user.UserRole,
           user: user,
         };
       }
@@ -441,6 +448,123 @@ export const authRouter = createTRPCRouter({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to delete invite",
+        });
+      }
+    }),
+
+  changePassword: publicProcedure
+    .input(
+      z.object({
+        newPassword: z.string().min(6),
+        confirmNewPassword: z.string().min(6),
+        email: z.string().email(),
+        token: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const { newPassword, confirmNewPassword } = input;
+
+      if (newPassword !== confirmNewPassword) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Passwords do not match",
+        });
+      }
+
+      try {
+        const user = await User.findOne({ email: input.email });
+        if (!user) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "User not found",
+          });
+        }
+
+        const salt = generateSalt();
+        const hashedPassword = await hashPassword(newPassword, salt);
+
+        user.password = hashedPassword;
+        user.salt = salt;
+        await user.save();
+
+        await deletePassToken(user.email);
+
+        return {
+          code: "OK",
+          message: "Password changed successfully",
+        };
+      } catch (error) {
+        console.error("Error changing password:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to change password",
+        });
+      }
+    }),
+
+  SendPassemail: publicProcedure
+    .input(
+      z.object({
+        email: z.string().email(),
+        baseurl: z.string().url(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const { email } = input;
+      try {
+        const user = await User.findOne({ email: email.toLowerCase() });
+        if (!user) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "User not found",
+          });
+        }
+        const token = await generatePassToken(user.email);
+        const link = `${
+          input.baseurl
+        }/auth/reset-password?token=${token}&email=${encodeURIComponent(
+          user.email
+        )}`;
+        await sendVerificationEmailChangepassword(user.email, link);
+        return {
+          code: "OK",
+          message: "Verification email sent successfully",
+        };
+      } catch (error) {
+        console.error("Error sending verification email:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to send verification email",
+        });
+      }
+    }),
+
+  verifyPassToken: publicProcedure
+    .input(
+      z.object({
+        email: z.string().email(),
+        token: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const { email, token } = input;
+      try {
+        const isValid = await verifyPassToken(email.toLowerCase(), token);
+        if (!isValid) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Invalid or expired token",
+          });
+        }
+        return {
+          code: "OK",
+          message: "Token is valid",
+        };
+      } catch (error) {
+        console.error("Error verifying password token:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to verify password token",
         });
       }
     }),

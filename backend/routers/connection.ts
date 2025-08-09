@@ -14,7 +14,6 @@ export const connectionRouter = createTRPCRouter({
       const connections = await Connection.find({ createdBy: hostId })
         .populate("userA", "username email profileImage")
         .populate("userB", "username email profileImage")
-        .populate("microCircleId", "_id name color")
         .lean();
 
       return {
@@ -78,7 +77,6 @@ export const connectionRouter = createTRPCRouter({
           ),
         ].map((id) => new Types.ObjectId(id));
 
-        // Validate all users in a single query
         const users = (await User.find({
           _id: { $in: allUserIds },
           hostId: hostId,
@@ -86,7 +84,6 @@ export const connectionRouter = createTRPCRouter({
 
         const validUserIds = new Set(users.map((u) => u._id.toString()));
 
-        // Process each connection
         for (const conn of input.connections) {
           const userAId = new Types.ObjectId(conn.userAId);
           const userBId = new Types.ObjectId(conn.userBId);
@@ -122,7 +119,6 @@ export const connectionRouter = createTRPCRouter({
             continue;
           }
 
-          // Validate users
           if (
             !validUserIds.has(userAId.toString()) ||
             !validUserIds.has(userBId.toString())
@@ -138,7 +134,6 @@ export const connectionRouter = createTRPCRouter({
             continue;
           }
 
-          // Check for existing connection
           const existingConnection = await Connection.findOne({
             $or: [
               { userA: userAId, userB: userBId },
@@ -157,7 +152,6 @@ export const connectionRouter = createTRPCRouter({
             continue;
           }
 
-          // Create connection
           const connection = new Connection({
             userA: userAId,
             userB: userBId,
@@ -205,7 +199,6 @@ export const connectionRouter = createTRPCRouter({
           (id) => new Types.ObjectId(id)
         );
 
-        // Find all connections in one query
         const connections = (await Connection.find({
           _id: { $in: connectionIds },
           createdBy: hostId,
@@ -220,7 +213,6 @@ export const connectionRouter = createTRPCRouter({
           message: string;
         }> = [];
 
-        // Process each deletion
         for (const connId of input.connectionIds) {
           if (!validConnectionIds.has(connId)) {
             results.push({
@@ -238,7 +230,6 @@ export const connectionRouter = createTRPCRouter({
           });
         }
 
-        // Delete all valid connections in one operation
         if (validConnectionIds.size > 0) {
           await Connection.deleteMany({
             _id: {
@@ -292,7 +283,6 @@ export const connectionRouter = createTRPCRouter({
           };
         }
 
-        // Validate both users exist and belong to this host
         const users = await User.find({
           _id: { $in: [userAId, userBId] },
           hostId: hostId,
@@ -448,4 +438,73 @@ export const connectionRouter = createTRPCRouter({
         });
       }
     }),
+
+  getUserConnections: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      const userId = Types.ObjectId.createFromHexString(ctx.user._id);
+
+      const connections = await Connection.find({
+        $or: [{ userA: userId }, { userB: userId }],
+      })
+        .populate("userA", "username email profileImage")
+        .populate("userB", "username email profileImage")
+        .populate("createdBy", "username email profileImage")
+        .lean();
+
+      const hostProfile = await User.findById(ctx.user._id, "hostId");
+      if (!hostProfile) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Host profile not found",
+        });
+      }
+      const hostObjectId = Types.ObjectId.createFromHexString(
+        hostProfile.hostId.toString()
+      );
+      const hostUser = await User.findById(
+        hostObjectId,
+        "username email profileImage"
+      );
+      if (!hostUser) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Host user not found",
+        });
+      }
+
+      const connectedUsers = connections.map((conn) => {
+        const isUserA = conn.userA._id.toString() === ctx.user._id.toString();
+        const otherUser = isUserA ? conn.userB : conn.userA;
+
+        return {
+          _id: otherUser._id.toString(),
+          username: otherUser.username,
+          email: otherUser.email,
+          profileImage: otherUser.profileImage,
+          connectionId: (conn._id as Types.ObjectId).toString(),
+          status: conn.status,
+        };
+      });
+      connectedUsers.push({
+        _id: hostUser._id.toString(),
+        username: hostUser.username || "Host",
+        email: hostUser.email || "host@example.com",
+        profileImage: hostUser.profileImage,
+        connectionId: "",
+        status: "HOST",
+      });
+
+      return {
+        code: "OK",
+        message: "Connected users retrieved successfully",
+        users: connectedUsers,
+      };
+    } catch (error) {
+      console.error("Error fetching user connections:", error);
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to fetch user connections",
+      });
+    }
+  }),
 });

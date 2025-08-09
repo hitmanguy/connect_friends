@@ -52,6 +52,18 @@
   }
 }
 
+@keyframes float {
+  0% {
+    transform: translate(0px, 0px);
+  }
+  50% {
+    transform: translate(20px, -20px);
+  }
+  100% {
+    transform: translate(0px, 0px);
+  }
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -124,6 +136,9 @@
   --animate-fade-slide-up: fadeSlideUp 0.8s ease-out forwards;
   --animate-scale-in: scaleIn 0.6s ease-out forwards;
   --animate-pendulum: pendulum 1.5s ease-in-out infinite;
+  --animate-float-slow: float 8s ease-in-out infinite;
+  --animate-float-medium: float 6s ease-in-out infinite alternate-reverse;
+  --animate-float-fast: float 4s ease-in-out infinite alternate-reverse;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -201,5 +216,88 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@media (max-width: 640px) {
+  .calendar-cell {
+    font-size: 0.75rem;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .calendar-modal {
+    width: 100vw;
+    height: 100vh;
+    max-width: none;
+    max-height: none;
+    border-radius: 0;
+    margin: 0;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: var(--scrollbar-track, #f0f9ff);
+    border-radius: 100vh;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb, #bfdbfe);
+    border-radius: 100vh;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover, #93c5fd);
+  }
+
+  .scrollbar-thumb-blue-200 {
+    --scrollbar-thumb: #bfdbfe;
+  }
+
+  .scrollbar-thumb-purple-200 {
+    --scrollbar-thumb: #e9d5ff;
+  }
+
+  .scrollbar-track-blue-50 {
+    --scrollbar-track: #f0f9ff;
+  }
+
+  .scrollbar-track-purple-50 {
+    --scrollbar-track: #faf5ff;
+  }
+}
+
+@layer utilities {
+  .text-2xs {
+    font-size: 0.65rem;
+    line-height: 1rem;
   }
 }

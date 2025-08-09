@@ -15,7 +15,7 @@ const connectionSchema = new Schema(
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: "User",
-      required: true, // Always the host
+      required: true,
     },
     status: {
       type: String,
@@ -30,7 +30,6 @@ const connectionSchema = new Schema(
   { timestamps: true }
 );
 
-// Ensure no duplicate connections
 connectionSchema.index({ userA: 1, userB: 1 }, { unique: true });
 
 export const Connection =

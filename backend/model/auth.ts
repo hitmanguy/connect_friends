@@ -2,51 +2,54 @@ import { Schema, models, model, InferSchemaType } from "mongoose";
 
 export const userRoles = ["user", "host"] as const;
 
-const UserSchema = new Schema({
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    lowercase: true,
+const UserSchema = new Schema(
+  {
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+    },
+    username: {
+      type: String,
+    },
+    verificationType: {
+      type: String,
+      enum: ["email", "google"],
+    },
+    password: {
+      type: String,
+      required: true,
+    },
+    salt: {
+      type: String,
+      required: true,
+    },
+    UserRole: {
+      type: String,
+      enum: userRoles,
+      default: "user",
+    },
+    hostId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: false,
+    },
+    profileImage: {
+      type: String,
+      required: false,
+    },
+    profileImagePublicId: {
+      type: String,
+      required: false,
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
   },
-  username: {
-    type: String,
-  },
-  verificationType: {
-    type: String,
-    enum: ["email", "google"],
-  },
-  password: {
-    type: String,
-    required: true,
-  },
-  salt: {
-    type: String,
-    required: true,
-  },
-  UserRole: {
-    type: String,
-    enum: userRoles,
-    default: "user",
-  },
-  hostId: {
-    type: Schema.Types.ObjectId,
-    ref: "User",
-    required: false,
-  },
-  profileImage: {
-    type: String,
-    required: false,
-  },
-  profileImagePublicId: {
-    type: String,
-    required: false,
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-});
+  { timestamps: true }
+);
 
 export const oAuthProviders = ["google"] as const;
 const oauthAccountSchema = new Schema({

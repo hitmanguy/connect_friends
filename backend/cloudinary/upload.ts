@@ -9,7 +9,7 @@ cloudinary.config({
 export async function uploadCloudinary(imageData: string, publicId: string) {
   try {
     const result = await cloudinary.uploader.upload(imageData, {
-      folder: "connect_friends/profiles",
+      folder: "connect_friends",
       public_id: publicId,
       transformation: [
         { width: 200, height: 200, crop: "fill" },

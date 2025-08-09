@@ -7,6 +7,7 @@ import React, {
   useEffect,
   useCallback,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   Dialog,
   DialogContent,
@@ -19,12 +20,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
-  Trash2,
   Plus,
   ZoomIn,
   ZoomOut,
   Move,
-  RotateCcw,
   AlertTriangle,
   Users,
   Network,
@@ -87,10 +86,6 @@ interface HubCircleGraphProps {
   onDeleteMultipleConnections?: (connectionIds: string[]) => void;
 }
 
-// ============================================================================
-// CONFIGURATION
-// ============================================================================
-
 const GRAPH_CONFIG = {
   HUB_SIZE: { w: 280, h: 120 },
   SPOKE_SIZE: { w: 220, h: 80 },
@@ -145,23 +140,18 @@ const GRAPH_CONFIG = {
 // UTILITY CLASSES
 // ============================================================================
 
-/**
- * Analyzes connection data to find relationships between users
- */
 class ConnectionAnalyzer {
   static analyzeConnections(users: User[], connections: Connection[]) {
     const directConnectionMap = new Map<string, Set<string>>();
     const connectionDetailMap = new Map<string, Map<string, Connection>>();
     const userMap = new Map<string, User>();
 
-    // Initialize maps
     users.forEach((user) => {
       userMap.set(user._id, user);
       directConnectionMap.set(user._id, new Set<string>());
       connectionDetailMap.set(user._id, new Map<string, Connection>());
     });
 
-    // Map direct connections
     connections.forEach((conn) => {
       const userAId = conn.userA._id;
       const userBId = conn.userB._id;
@@ -177,7 +167,6 @@ class ConnectionAnalyzer {
       }
     });
 
-    // Find circles (groups of users all connected to each other)
     const circleData = this.detectCircleGroups(users, directConnectionMap);
 
     return {
@@ -197,7 +186,6 @@ class ConnectionAnalyzer {
     const assignedCircleConnections = new Set<string>();
     let circleCounter = 0;
 
-    // Check if all users in a set are connected to each other
     const isFullyConnected = (userIds: string[]): boolean => {
       for (let i = 0; i < userIds.length; i++) {
         const connections = connectionMap.get(userIds[i]) || new Set();
@@ -210,19 +198,16 @@ class ConnectionAnalyzer {
       return true;
     };
 
-    // Find potential groups, including pairs
     const findPotentialGroups = () => {
       const groups: Array<string[]> = [];
       const visitedGroups = new Set<string>();
 
-      // Start with seed groups of 2+ connected users
       for (const user of users) {
         const connections = connectionMap.get(user._id);
         if (!connections || connections.size < 1) continue;
 
         const connectedUsers = Array.from(connections);
 
-        // Add pairs as potential groups
         for (const connectedUser of connectedUsers) {
           const pairKey = [user._id, connectedUser].sort().join("-");
           if (!visitedGroups.has(pairKey)) {
@@ -231,14 +216,12 @@ class ConnectionAnalyzer {
           }
         }
 
-        // Try to find larger fully connected groups
         if (connections.size >= 2) {
           for (let i = 0; i < connectedUsers.length; i++) {
             for (let j = i + 1; j < connectedUsers.length; j++) {
               const userA = connectedUsers[i];
               const userB = connectedUsers[j];
 
-              // Check if they're connected to form a triangle
               if (connectionMap.get(userA)?.has(userB)) {
                 const triangleKey = [user._id, userA, userB].sort().join("-");
                 if (!visitedGroups.has(triangleKey)) {
@@ -251,7 +234,6 @@ class ConnectionAnalyzer {
         }
       }
 
-      // Expand existing groups by adding connected users
       const expandedGroups: Array<string[]> = [...groups];
       let expanded = true;
 
@@ -262,15 +244,12 @@ class ConnectionAnalyzer {
           const group = expandedGroups[g];
           const potentialMembers = new Set<string>();
 
-          // Find users connected to ALL current group members
           for (const userId of group) {
             const connections = connectionMap.get(userId) || new Set();
 
             if (potentialMembers.size === 0) {
-              // First user - add all connections as potential
               connections.forEach((conn) => potentialMembers.add(conn));
             } else {
-              // Keep only users connected to all previous members
               const toKeep = new Set<string>();
               potentialMembers.forEach((potentialId) => {
                 if (
@@ -285,7 +264,6 @@ class ConnectionAnalyzer {
             }
           }
 
-          // Try to add each potential member to the group
           for (const newMemberId of potentialMembers) {
             const newGroup = [...group, newMemberId];
             if (isFullyConnected(newGroup)) {
@@ -303,15 +281,11 @@ class ConnectionAnalyzer {
       return expandedGroups;
     };
 
-    // Get all potential groups
     const potentialGroups = findPotentialGroups();
 
-    // Sort by size (descending) so we find largest groups first
     potentialGroups.sort((a, b) => b.length - a.length);
 
-    // Create circles from the potential groups
     for (const group of potentialGroups) {
-      // Skip groups where some users are already in larger groups
       if (
         group.some((userId) => {
           for (const [circleId, members] of circles.entries()) {
@@ -327,7 +301,6 @@ class ConnectionAnalyzer {
       const circleId = `circle-${circleCounter++}`;
       circles.set(circleId, new Set(group));
 
-      // Mark all connections in this circle as represented by the circle
       for (let i = 0; i < group.length; i++) {
         for (let j = i + 1; j < group.length; j++) {
           const connectionKey = [group[i], group[j]].sort().join("-");
@@ -342,12 +315,11 @@ class ConnectionAnalyzer {
     };
   }
 
-  static getConnectionColor(connection: Connection, defaultColor: string) {
+  static getConnectionColor(defaultColor: string) {
     return defaultColor;
   }
 
   static getCircleName(circleUsers: User[]): string {
-    // Generate an appropriate name based on size
     if (circleUsers.length === 2) {
       return "Pair";
     } else if (circleUsers.length === 3) {
@@ -362,9 +334,6 @@ class ConnectionAnalyzer {
   }
 }
 
-/**
- * Layout engine for calculating node positions
- */
 class LayoutEngine {
   static calculateOptimalPositions(
     users: User[],
@@ -380,10 +349,8 @@ class LayoutEngine {
       connections
     );
 
-    // Determine layers based on user count
     const layers = this.calculateLayers(users.length);
 
-    // Position users in concentric circles with optimized spacing
     let userPositions = this.positionUsersInLayers(
       users,
       connectionData,
@@ -393,19 +360,16 @@ class LayoutEngine {
       isMobile
     );
 
-    // Process circles for visualization with centralized circle nodes
     let circleNodes = this.processCircleNodes(
       connectionData,
       userPositions,
       centerX,
       centerY,
-      connections,
       isMobile,
       width,
       height
     );
 
-    // Final collision resolution pass
     const { adjustedPositions, adjustedCircles } = this.finalCollisionCheck(
       userPositions,
       circleNodes,
@@ -415,7 +379,6 @@ class LayoutEngine {
     userPositions = adjustedPositions;
     circleNodes = adjustedCircles;
 
-    // Track which connections should be shown directly vs. through circles
     const connectionCircleMap = new Map<string, string>();
     circleNodes.forEach((circle) => {
       const userIds = circle.users.map((u: User) => u._id);
@@ -427,14 +390,12 @@ class LayoutEngine {
       }
     });
 
-    // Process connections for visualization
     const processedConnections = this.processConnections(
       connections,
       userPositions,
       connectionCircleMap
     );
 
-    // Generate circle connections (from users to circle nodes)
     const circleConnections = this.generateCircleConnections(
       circleNodes,
       userPositions
@@ -455,23 +416,17 @@ class LayoutEngine {
     usersPerLayer: number[];
     radiusPerLayer: number[];
   } {
-    // Base layer configuration with increased spacing
     const baseRadius = 500;
     const baseUsersPerLayer = 10;
 
-    // Calculate users per layer based on circumference
     const calculateUsersInLayer = (layerIndex: number) => {
-      // Each subsequent layer can fit more users as the circumference grows
-      return Math.floor(baseUsersPerLayer * (1 + layerIndex * 0.4));
+      return Math.floor(baseUsersPerLayer * (1 + layerIndex * 0.6));
     };
 
-    // Calculate radius for a layer
     const calculateLayerRadius = (layerIndex: number) => {
-      // Each layer should be further out, with increasing gaps between layers
-      return baseRadius + layerIndex * 250;
+      return baseRadius + layerIndex * 450;
     };
 
-    // Calculate how many layers we need
     let remainingUsers = userCount;
     const usersPerLayer: number[] = [];
     const radiusPerLayer: number[] = [];
@@ -520,7 +475,6 @@ class LayoutEngine {
 
     let userIndex = 0;
 
-    // Position users layer by layer with improved spacing
     for (let layer = 0; layer < usersPerLayer.length; layer++) {
       const radius = isMobile
         ? radiusPerLayer[layer] * GRAPH_CONFIG.MOBILE.SCALE_FACTOR
@@ -528,20 +482,16 @@ class LayoutEngine {
 
       const userCount = usersPerLayer[layer];
 
-      // Calculate minimum angular spacing based on node size and layer radius
       const nodeWidth =
         GRAPH_CONFIG.SPOKE_SIZE.w *
         (isMobile ? GRAPH_CONFIG.MOBILE.SCALE_FACTOR : 1);
       const circumference = 2 * Math.PI * radius;
       const minAngleStep = ((nodeWidth * 1.3) / circumference) * (2 * Math.PI);
 
-      // Use either calculated minimum spacing or evenly distributed spacing, whichever is larger
       const angleStep = Math.max(minAngleStep, (2 * Math.PI) / userCount);
 
-      // Distribute starting angle to center the nodes
       const startAngle = -Math.PI / 2 - (angleStep * (userCount - 1)) / 2;
 
-      // Position users in this layer
       for (let i = 0; i < userCount; i++) {
         if (userIndex >= users.length) break;
 
@@ -562,7 +512,6 @@ class LayoutEngine {
       }
     }
 
-    // Update connection information for each position
     for (const pos of positions) {
       const connections =
         connectionData.directConnectionMap.get(pos.user._id) || new Set();
@@ -578,12 +527,10 @@ class LayoutEngine {
     userPositions: any[],
     centerX: number,
     centerY: number,
-    connections: Connection[],
     isMobile: boolean,
     width: number,
     height: number
   ) {
-    // Circle node detection and placement with strong collision avoidance
     const circleNodes: {
       id: string;
       users: User[];
@@ -594,21 +541,15 @@ class LayoutEngine {
       radius: number;
     }[] = [];
     const minDistanceBetweenCircles = isMobile ? 100 : 150;
-    const minDistanceFromNode = isMobile ? 80 : 130;
-
-    // First pass - calculate initial positions
     Array.from(connectionData.circles.entries()).forEach((entry, index) => {
       const [circleId, userIds] = entry as [string, Set<string>];
       const circleUserIds = Array.from(userIds);
-
-      // Skip if empty (though this should never happen)
       if (circleUserIds.length === 0) return;
 
       const circleUsers = circleUserIds
         .map((id) => connectionData.userMap.get(id)!)
         .filter(Boolean);
 
-      // Get positions for circle users
       const userPositionsList = circleUserIds
         .map((userId) => {
           const position = userPositions.find((p) => p.user._id === userId);
@@ -618,7 +559,6 @@ class LayoutEngine {
 
       if (userPositionsList.length === 0) return;
 
-      // Calculate circle center (centroid of user positions)
       const position = {
         x:
           userPositionsList.reduce((sum, pos) => sum + pos!.x, 0) /
@@ -628,7 +568,6 @@ class LayoutEngine {
           userPositionsList.length,
       };
 
-      // Adjust position to be slightly offset from the perfect center to avoid overlapping with hub
       const distanceFromCenter = Math.sqrt(
         Math.pow(position.x - centerX, 2) + Math.pow(position.y - centerY, 2)
       );
@@ -640,13 +579,11 @@ class LayoutEngine {
         position.y = centerY + offsetDistance * Math.sin(angle);
       }
 
-      // Assign color based on circle index
       const color =
         GRAPH_CONFIG.COLORS.CIRCLE_GROUP_COLORS[
           index % GRAPH_CONFIG.COLORS.CIRCLE_GROUP_COLORS.length
         ];
 
-      // Generate a meaningful name for the circle
       const name = ConnectionAnalyzer.getCircleName(circleUsers);
 
       circleNodes.push({
@@ -656,23 +593,21 @@ class LayoutEngine {
         color,
         name,
         userCount: circleUsers.length,
-        radius: isMobile ? 10 : 20, // Store radius for collision detection
+        radius: isMobile ? 10 : 20,
       });
     });
 
-    // Second pass - strong collision resolution using force-directed algorithm
-    const iterations = 100; // More iterations for better results
+    const iterations = 100;
     for (let iter = 0; iter < iterations; iter++) {
       let totalMovement = 0;
 
-      // Create rectangle boundaries for all user nodes for better collision detection
       const userRectangles = userPositions.map((pos) => {
         const scale = isMobile ? GRAPH_CONFIG.MOBILE.SCALE_FACTOR : 1;
         const width = GRAPH_CONFIG.SPOKE_SIZE.w * scale;
         const height = GRAPH_CONFIG.SPOKE_SIZE.h * scale;
         return {
           id: pos.user._id,
-          x1: pos.x - width / 2 - 10, // Add padding
+          x1: pos.x - width / 2 - 10,
           y1: pos.y - height / 2 - 10,
           x2: pos.x + width / 2 + 10,
           y2: pos.y + height / 2 + 10,
@@ -681,13 +616,10 @@ class LayoutEngine {
         };
       });
 
-      // Move circles away from user rectangles with improved algorithm
       for (const circle of circleNodes) {
-        const circleRadius = circle.radius + 10; // Add safety margin
+        const circleRadius = circle.radius + 10;
 
-        // Check against all user rectangles
         for (const rect of userRectangles) {
-          // Calculate if circle overlaps with rectangle
           const testX = Math.max(rect.x1, Math.min(circle.position.x, rect.x2));
           const testY = Math.max(rect.y1, Math.min(circle.position.y, rect.y2));
 
@@ -696,7 +628,6 @@ class LayoutEngine {
           const distance = Math.sqrt(distX * distX + distY * distY);
 
           if (distance < circleRadius) {
-            // Calculate vector to push circle away
             const forceDirectionX = circle.position.x - rect.centerX;
             const forceDirectionY = circle.position.y - rect.centerY;
             const forceMag = Math.sqrt(
@@ -704,17 +635,13 @@ class LayoutEngine {
                 forceDirectionY * forceDirectionY
             );
 
-            // Normalized force vector with magnitude proportional to overlap
-            const moveDistance = circleRadius - distance + 30; // Extra distance for safety
+            const moveDistance = circleRadius - distance + 30;
 
-            // Check if we're at zero vector (in case the circle is exactly at rectangle center)
             if (forceMag < 0.01) {
-              // Random direction if we're at the center
               const angle = Math.random() * 2 * Math.PI;
               circle.position.x += Math.cos(angle) * moveDistance;
               circle.position.y += Math.sin(angle) * moveDistance;
             } else {
-              // Move along the normalized force vector
               circle.position.x += (forceDirectionX / forceMag) * moveDistance;
               circle.position.y += (forceDirectionY / forceMag) * moveDistance;
             }
@@ -724,7 +651,6 @@ class LayoutEngine {
         }
       }
 
-      // Move circles away from other circles
       for (let i = 0; i < circleNodes.length; i++) {
         for (let j = i + 1; j < circleNodes.length; j++) {
           const dx = circleNodes[i].position.x - circleNodes[j].position.x;
@@ -736,9 +662,8 @@ class LayoutEngine {
             minDistanceBetweenCircles;
 
           if (distance < minDist) {
-            // Push circles apart with stronger force
-            const force = ((minDist - distance) / minDist) * 1.5; // Increased multiplier
-            const moveX = dx * force * 0.5; // Stronger movement
+            const force = ((minDist - distance) / minDist) * 1.5;
+            const moveX = dx * force * 0.5;
             const moveY = dy * force * 0.5;
 
             circleNodes[i].position.x += moveX;
@@ -750,47 +675,41 @@ class LayoutEngine {
         }
       }
 
-      // Keep circles away from the center hub
       for (const circle of circleNodes) {
         const dx = circle.position.x - centerX;
         const dy = circle.position.y - centerY;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        const minDistFromHub = isMobile ? 180 : 240; // Increased minimum distance
+        const minDistFromHub = isMobile ? 180 : 240;
 
         if (distance < minDistFromHub) {
           const force = (minDistFromHub - distance) / minDistFromHub;
           const angle = Math.atan2(dy, dx);
-          circle.position.x += Math.cos(angle) * force * 30; // Stronger push
+          circle.position.x += Math.cos(angle) * force * 30;
           circle.position.y += Math.sin(angle) * force * 30;
           totalMovement += force * 30;
         }
       }
 
-      // Add edge repulsion to keep circles from going off-screen
       const margin = 100;
       const boundaryForce = 0.2;
 
       for (const circle of circleNodes) {
-        // Left boundary
         if (circle.position.x - circle.radius < margin) {
           circle.position.x +=
             boundaryForce * (margin - (circle.position.x - circle.radius));
           totalMovement += boundaryForce;
         }
-        // Right boundary
         if (circle.position.x + circle.radius > width - margin) {
           circle.position.x -=
             boundaryForce *
             (circle.position.x + circle.radius - (width - margin));
           totalMovement += boundaryForce;
         }
-        // Top boundary
         if (circle.position.y - circle.radius < margin) {
           circle.position.y +=
             boundaryForce * (margin - (circle.position.y - circle.radius));
           totalMovement += boundaryForce;
         }
-        // Bottom boundary
         if (circle.position.y + circle.radius > height - margin) {
           circle.position.y -=
             boundaryForce *
@@ -799,7 +718,6 @@ class LayoutEngine {
         }
       }
 
-      // Stop early if movement is minimal
       if (totalMovement < 0.1) break;
     }
 
@@ -811,36 +729,27 @@ class LayoutEngine {
     circleNodes: any[],
     isMobile: boolean
   ) {
-    // Create copies we can modify
     const adjustedPositions = [...userPositions];
     const adjustedCircles = [...circleNodes];
 
-    // Node dimensions
     const scale = isMobile ? GRAPH_CONFIG.MOBILE.SCALE_FACTOR : 1;
     const nodeWidth = GRAPH_CONFIG.SPOKE_SIZE.w * scale;
     const nodeHeight = GRAPH_CONFIG.SPOKE_SIZE.h * scale;
 
-    // Final check and minor adjustment for node-node overlaps
-    // We don't reposition nodes from their circular formation, just optimize the layout
     const nodeSwapIterations = 10;
 
-    // Try to optimize by swapping nodes if that would reduce overlap
     for (let iter = 0; iter < nodeSwapIterations; iter++) {
       let improved = false;
 
-      // Try swapping adjacent nodes in the same layer
       for (let layer = 0; layer < 10; layer++) {
-        // Safe max number of layers
         const layerNodes = adjustedPositions.filter((p) => p.layer === layer);
         if (layerNodes.length < 2) continue;
 
-        // Sort by angle for easier adjacency check
         layerNodes.sort((a, b) => a.angle - b.angle);
 
         for (let i = 0; i < layerNodes.length; i++) {
-          const j = (i + 1) % layerNodes.length; // Adjacent node (circular)
+          const j = (i + 1) % layerNodes.length;
 
-          // Calculate current overlap
           const node1 = layerNodes[i];
           const node2 = layerNodes[j];
 
@@ -863,7 +772,6 @@ class LayoutEngine {
             currentRect2
           );
 
-          // Calculate overlap if we swapped positions
           const swappedRect1 = {
             x: node2.x - nodeWidth / 2,
             y: node2.y - nodeHeight / 2,
@@ -883,9 +791,7 @@ class LayoutEngine {
             swappedRect2
           );
 
-          // If swapping reduces overlap, do it
           if (swappedOverlap < currentOverlap) {
-            // Swap positions but keep original angle and layer info
             const tempX = node1.x;
             const tempY = node1.y;
 
@@ -910,7 +816,6 @@ class LayoutEngine {
   }
 
   static calculateRectOverlap(rect1: any, rect2: any): number {
-    // Calculate overlap area between two rectangles
     if (
       rect1.x < rect2.x + rect2.width &&
       rect1.x + rect1.width > rect2.x &&
@@ -930,7 +835,7 @@ class LayoutEngine {
       return xOverlap * yOverlap;
     }
 
-    return 0; // No overlap
+    return 0;
   }
 
   static processConnections(
@@ -949,21 +854,17 @@ class LayoutEngine {
 
         if (!userAPos || !userBPos) return null;
 
-        // Check if this connection should be represented by a circle
         const connectionKey = [conn.userA._id, conn.userB._id].sort().join("-");
         const circleId = connectionCircleMap.get(connectionKey);
 
         if (circleId) {
-          // This connection is part of a circle, don't show direct line
           return null;
         }
 
-        // Calculate midpoint for label
         const midX = (userAPos.x + userBPos.x) / 2;
         const midY = (userAPos.y + userBPos.y) / 2;
 
         const color = ConnectionAnalyzer.getConnectionColor(
-          conn,
           GRAPH_CONFIG.COLORS.CONNECTION_LINE
         );
 
@@ -1010,7 +911,7 @@ class LayoutEngine {
     maxWidth: number
   ): { fontSize: number; truncated: string } {
     const baseFontSize = 14;
-    const charWidth = 7.5; // Adjusted for wider character estimation
+    const charWidth = 7.5;
     const maxChars = Math.floor(maxWidth / charWidth);
 
     if (text.length <= maxChars) {
@@ -1028,16 +929,12 @@ class LayoutEngine {
 // COMPONENT IMPLEMENTATIONS
 // ============================================================================
 
-/**
- * Hub Node (Center)
- */
 function HubNode({
   x,
   y,
   avatar,
   name,
   email,
-  highlight,
   isMobile,
 }: {
   x: number;
@@ -1045,7 +942,6 @@ function HubNode({
   avatar?: string;
   name: string;
   email?: string;
-  highlight?: boolean;
   isMobile: boolean;
 }) {
   const scale = isMobile ? GRAPH_CONFIG.MOBILE.SCALE_FACTOR : 1;
@@ -1055,7 +951,6 @@ function HubNode({
   };
   const { HUB_FILL, HUB_STROKE } = GRAPH_CONFIG.COLORS;
 
-  // Calculate text sizing
   const nameText = LayoutEngine.calculateOptimalTextSize(name, w - 120);
   const emailText = email
     ? LayoutEngine.calculateOptimalTextSize(email, w - 120)
@@ -1066,7 +961,6 @@ function HubNode({
 
   return (
     <g className="transition-all duration-200">
-      {/* Drop shadow */}
       <rect
         x={x - w / 2 + 3}
         y={y - h / 2 + 3}
@@ -1077,7 +971,6 @@ function HubNode({
         opacity={0.2}
       />
 
-      {/* Main hub rectangle */}
       <rect
         x={x - w / 2}
         y={y - h / 2}
@@ -1092,7 +985,6 @@ function HubNode({
         }}
       />
 
-      {/* Avatar */}
       <foreignObject
         x={x - w / 2 + 18}
         y={y - h / 2 + 14}
@@ -1114,7 +1006,6 @@ function HubNode({
         </div>
       </foreignObject>
 
-      {/* Name */}
       <text
         x={x - w / 2 + h + 8}
         y={y - 8}
@@ -1127,7 +1018,6 @@ function HubNode({
         {nameText.truncated}
       </text>
 
-      {/* Email */}
       {emailText && (
         <text
           x={x - w / 2 + h + 8}
@@ -1141,7 +1031,6 @@ function HubNode({
         </text>
       )}
 
-      {/* Hub label */}
       <text
         x={x}
         y={y + h / 2 + (isMobile ? 15 : 20)}
@@ -1157,9 +1046,6 @@ function HubNode({
   );
 }
 
-/**
- * Spoke Node (User)
- */
 function SpokeNode({
   x,
   y,
@@ -1208,7 +1094,6 @@ function SpokeNode({
     SEARCH_HIGHLIGHT,
   } = GRAPH_CONFIG.COLORS;
 
-  // Calculate text sizing
   const maxTextWidth = isMobile ? w - 70 : w - 90;
   const nameText = LayoutEngine.calculateOptimalTextSize(name, maxTextWidth);
   const emailText = email
@@ -1239,7 +1124,6 @@ function SpokeNode({
       style={{ cursor: onClick ? "pointer" : "default" }}
       className="transition-all duration-200"
     >
-      {/* Drop shadow */}
       <rect
         x={x - w / 2 + 2}
         y={y - h / 2 + 2}
@@ -1250,7 +1134,6 @@ function SpokeNode({
         opacity={0.15}
       />
 
-      {/* Main spoke rectangle */}
       <rect
         x={x - w / 2}
         y={y - h / 2}
@@ -1269,7 +1152,6 @@ function SpokeNode({
         }}
       />
 
-      {/* Avatar */}
       <foreignObject
         x={x - w / 2 + 14}
         y={y - h / 2 + 12}
@@ -1291,7 +1173,6 @@ function SpokeNode({
         </div>
       </foreignObject>
 
-      {/* Name */}
       <text
         x={x - w / 2 + h + 6}
         y={y - 10}
@@ -1304,7 +1185,6 @@ function SpokeNode({
         {nameText.truncated}
       </text>
 
-      {/* Email */}
       {emailText && (
         <text
           x={x - w / 2 + h + 6}
@@ -1318,7 +1198,6 @@ function SpokeNode({
         </text>
       )}
 
-      {/* Connection count badge */}
       {connectionCount > 0 && (
         <g>
           <circle
@@ -1343,7 +1222,6 @@ function SpokeNode({
         </g>
       )}
 
-      {/* Micro Circle indicators */}
       {microCircles && microCircles.length > 0 && (
         <g className="micro-circle-indicators">
           <foreignObject
@@ -1376,7 +1254,6 @@ function SpokeNode({
         </g>
       )}
 
-      {/* Enhanced Selection Effect */}
       {isSelected && (
         <>
           <rect
@@ -1411,7 +1288,6 @@ function SpokeNode({
         </>
       )}
 
-      {/* Search Result Highlight */}
       {isSearchResult && (
         <rect
           x={x - w / 2 - 8}
@@ -1431,7 +1307,6 @@ function SpokeNode({
         />
       )}
 
-      {/* Special highlight for connected nodes when another node is selected */}
       {highlight && !isSelected && !isSearchResult && (
         <rect
           x={x - w / 2 - 4}
@@ -1453,9 +1328,6 @@ function SpokeNode({
   );
 }
 
-/**
- * Circle Node (formerly Pod)
- */
 function CircleNode({
   x,
   y,
@@ -1475,7 +1347,6 @@ function CircleNode({
 
   return (
     <g className="transition-all duration-200">
-      {/* Soft outer glow for the circle */}
       <circle
         cx={x}
         cy={y}
@@ -1487,7 +1358,6 @@ function CircleNode({
         }}
       />
 
-      {/* Circle background */}
       <circle
         cx={x}
         cy={y}
@@ -1504,7 +1374,6 @@ function CircleNode({
         }}
       />
 
-      {/* User count badge */}
       <circle
         cx={x}
         cy={y - radius + 10}
@@ -1528,9 +1397,6 @@ function CircleNode({
   );
 }
 
-/**
- * Connection Line
- */
 function ConnectionLine({
   sourceX,
   sourceY,
@@ -1538,7 +1404,6 @@ function ConnectionLine({
   targetY,
   color,
   isHighlighted,
-  isDirectConnection,
   onMouseEnter,
   onMouseLeave,
   isMobile,
@@ -1549,7 +1414,6 @@ function ConnectionLine({
   targetY: number;
   color: string;
   isHighlighted?: boolean;
-  isDirectConnection?: boolean;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
   isMobile: boolean;
@@ -1558,16 +1422,13 @@ function ConnectionLine({
     ? GRAPH_CONFIG.CONNECTION_LINE_WIDTH * 0.8
     : GRAPH_CONFIG.CONNECTION_LINE_WIDTH;
   const strokeWidth = isHighlighted ? baseWidth + 2 : baseWidth;
-  const opacity = isHighlighted ? 1 : 0.9; // Increased from 0.85 for better visibility
+  const opacity = isHighlighted ? 1 : 0.9;
 
-  // Calculate hit area (wider invisible line for better mouse interaction)
   const dx = targetX - sourceX;
   const dy = targetY - sourceY;
   const angle = Math.atan2(dy, dx);
-  const length = Math.sqrt(dx * dx + dy * dy);
 
-  // Hit area points (wider than the visible line)
-  const hitAreaWidth = isMobile ? 30 : 20; // Even wider hit area on mobile
+  const hitAreaWidth = isMobile ? 30 : 20;
   const x1 = sourceX;
   const y1 = sourceY;
   const x2 = targetX;
@@ -1579,7 +1440,6 @@ function ConnectionLine({
 
   return (
     <>
-      {/* Shadow line (wider, more transparent) */}
       <line
         x1={sourceX}
         y1={sourceY}
@@ -1593,7 +1453,6 @@ function ConnectionLine({
         }}
       />
 
-      {/* Main visible line */}
       <line
         x1={sourceX}
         y1={sourceY}
@@ -1610,7 +1469,6 @@ function ConnectionLine({
         }}
       />
 
-      {/* Invisible wider hit area for better interaction */}
       <polygon
         points={`${x1},${y1} ${x2},${y2} ${x3},${y3} ${x4},${y4}`}
         fill="transparent"
@@ -1622,9 +1480,6 @@ function ConnectionLine({
   );
 }
 
-/**
- * Circle Connection Line
- */
 function CircleConnectionLine({
   userX,
   userY,
@@ -1649,7 +1504,6 @@ function CircleConnectionLine({
 
   return (
     <>
-      {/* Shadow line */}
       <line
         x1={userX}
         y1={userY}
@@ -1663,7 +1517,6 @@ function CircleConnectionLine({
         }}
       />
 
-      {/* Main line */}
       <line
         x1={userX}
         y1={userY}
@@ -1681,16 +1534,12 @@ function CircleConnectionLine({
   );
 }
 
-/**
- * Connection Label
- */
 function ConnectionLabel({
   x,
   y,
   name,
   color,
   onDelete,
-  connectionId,
   isHighlighted,
   isMobile,
 }: {
@@ -1699,7 +1548,6 @@ function ConnectionLabel({
   name: string;
   color: string;
   onDelete?: () => void;
-  connectionId: string;
   isHighlighted?: boolean;
   isMobile: boolean;
 }) {
@@ -1721,7 +1569,6 @@ function ConnectionLabel({
         onMouseLeave={() => setHover(false)}
         className="transition-all duration-200"
       >
-        {/* Label background */}
         <rect
           x={x - w / 2}
           y={y - h / 2}
@@ -1740,7 +1587,6 @@ function ConnectionLabel({
           }}
         />
 
-        {/* Label text */}
         <text
           x={x}
           y={y + 2}
@@ -1758,7 +1604,6 @@ function ConnectionLabel({
           {labelText.truncated}
         </text>
 
-        {/* Delete button */}
         {localHighlight && onDelete && (
           <g
             onClick={(e) => {
@@ -1793,7 +1638,6 @@ function ConnectionLabel({
         )}
       </g>
 
-      {/* Delete confirmation dialog */}
       <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <DialogContent className="max-w-md">
           <div className="flex items-center gap-3 mb-4">
@@ -1831,112 +1675,186 @@ function ConnectionLabel({
   );
 }
 
-/**
- * Selection Info Card (when single user is selected)
- */
+function MobileOverlay({ children }: { children: React.ReactNode }) {
+  return createPortal(
+    <div
+      className="fixed inset-x-0 z-[100] pointer-events-none"
+      style={{
+        bottom: "max(env(safe-area-inset-bottom), 16px)",
+      }}
+    >
+      <div className="flex justify-center">
+        <div className="pointer-events-auto w-[92vw] max-w-[400px]">
+          {children}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function SelectionInfoCard({
   selectedUser,
-  connectedUsers,
   onClearSelection,
   isMobile,
 }: {
   selectedUser: { user: User; connections: User[] };
-  connectedUsers: User[];
   onClearSelection: () => void;
   isMobile: boolean;
 }) {
-  return (
-    <div className="absolute top-4 right-4 max-w-[280px] z-50">
-      <Card className="shadow-lg border-blue-200">
-        <CardContent className="pt-5 px-5 pb-4">
-          <div className="flex justify-between items-start">
-            <div className="flex items-center gap-3 mb-3">
-              <Avatar className="border-2 border-blue-100 w-9 h-9">
-                <AvatarImage
-                  src={selectedUser.user.profileImage}
-                  alt={selectedUser.user.username}
-                />
-                <AvatarFallback className="bg-blue-100 text-blue-800 text-xs font-semibold">
-                  {selectedUser.user.username
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")
-                    .slice(0, 2)
-                    .toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <h3 className="font-semibold text-sm leading-tight">
-                  {selectedUser.user.username}
-                </h3>
-                <p className="text-xs text-gray-500 mt-0.5">
+  const content = (
+    <Card className="shadow-xl border-blue-200 rounded-2xl overflow-hidden">
+      <CardContent className={isMobile ? "pt-3 px-3 pb-3" : "pt-5 px-5 pb-4"}>
+        <div className="flex justify-between items-start">
+          <div className="flex items-center gap-2 mb-2 md:mb-3">
+            <Avatar
+              className={
+                isMobile
+                  ? "border-2 border-blue-100 w-8 h-8"
+                  : "border-2 border-blue-100 w-9 h-9"
+              }
+            >
+              <AvatarImage
+                src={selectedUser.user.profileImage}
+                alt={selectedUser.user.username}
+              />
+              <AvatarFallback className="bg-blue-100 text-blue-800 text-[10px] md:text-xs font-semibold">
+                {selectedUser.user.username
+                  .split(" ")
+                  .map((n) => n[0])
+                  .join("")
+                  .slice(0, 2)
+                  .toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <h3
+                className={
+                  isMobile
+                    ? "font-semibold text-[13px] leading-tight"
+                    : "font-semibold text-sm leading-tight"
+                }
+              >
+                {selectedUser.user.username}
+              </h3>
+              {selectedUser.user.email && (
+                <p
+                  className={
+                    isMobile
+                      ? "text-[10px] text-gray-500 mt-0.5"
+                      : "text-xs text-gray-500 mt-0.5"
+                  }
+                >
                   {selectedUser.user.email}
                 </p>
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-full h-8 w-8"
-              onClick={onClearSelection}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-
-          {selectedUser.user.microCircles &&
-            selectedUser.user.microCircles.length > 0 && (
-              <div className="mb-2">
-                <h5 className="text-xs font-medium mb-1 flex items-center">
-                  <CircleIcon className="h-3 w-3 mr-1" />
-                  Member of
-                </h5>
-                <div className="flex flex-wrap gap-1">
-                  {selectedUser.user.microCircles.map((circle) => (
-                    <Badge
-                      key={circle.id}
-                      style={{ backgroundColor: circle.color }}
-                      className="text-white text-xs"
-                    >
-                      {circle.name}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-          <div className="mt-4">
-            <h5 className="text-xs font-medium mb-2 flex items-center gap-1">
-              <LinkIcon className="h-3 w-3" />
-              <span>
-                {selectedUser.connections.length} Connection
-                {selectedUser.connections.length !== 1 ? "s" : ""}
-              </span>
-            </h5>
-            <div className="flex flex-wrap gap-1">
-              {selectedUser.connections.map((user) => (
-                <Badge
-                  key={user._id}
-                  variant="secondary"
-                  className="text-xs font-normal"
-                >
-                  {user.username}
-                </Badge>
-              ))}
-              {selectedUser.connections.length === 0 && (
-                <span className="text-xs text-gray-500">No connections</span>
               )}
             </div>
           </div>
-        </CardContent>
-      </Card>
-    </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={
+              isMobile ? "rounded-full h-7 w-7" : "rounded-full h-8 w-8"
+            }
+            onClick={onClearSelection}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {selectedUser.user.microCircles &&
+          selectedUser.user.microCircles.length > 0 && (
+            <div className={isMobile ? "mb-1.5" : "mb-2"}>
+              <h5
+                className={
+                  isMobile
+                    ? "text-[10px] font-medium mb-1 flex items-center"
+                    : "text-xs font-medium mb-1 flex items-center"
+                }
+              >
+                <CircleIcon className="h-3 w-3 mr-1" />
+                Member of
+              </h5>
+              <div className="flex flex-wrap gap-1">
+                {selectedUser.user.microCircles.map((circle) => (
+                  <Badge
+                    key={circle.id}
+                    style={{ backgroundColor: circle.color }}
+                    className={
+                      isMobile
+                        ? "text-white text-[9px] py-0 px-1"
+                        : "text-white text-xs"
+                    }
+                  >
+                    {circle.name}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
+        <div className={isMobile ? "mt-3" : "mt-4"}>
+          <h5
+            className={
+              isMobile
+                ? "text-[10px] font-medium mb-1.5 flex items-center gap-1"
+                : "text-xs font-medium mb-2 flex items-center gap-1"
+            }
+          >
+            <LinkIcon className="h-3 w-3" />
+            <span>
+              {selectedUser.connections.length} Connection
+              {selectedUser.connections.length !== 1 ? "s" : ""}
+            </span>
+          </h5>
+
+          <div
+            className={
+              isMobile
+                ? "flex flex-wrap gap-1 max-h-[40vh] overflow-auto pr-1"
+                : "flex flex-wrap gap-1"
+            }
+          >
+            {selectedUser.connections.length > 0 ? (
+              selectedUser.connections.map((user) => (
+                <Badge
+                  key={user._id}
+                  variant="secondary"
+                  className={
+                    isMobile
+                      ? "text-[10px] font-normal py-0 px-1"
+                      : "text-xs font-normal"
+                  }
+                >
+                  {user.username}
+                </Badge>
+              ))
+            ) : (
+              <span
+                className={
+                  isMobile
+                    ? "text-[10px] text-gray-500"
+                    : "text-xs text-gray-500"
+                }
+              >
+                No connections
+              </span>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
+
+  if (!isMobile) {
+    return (
+      <div className="absolute top-4 right-4 max-w-[280px] z-50">{content}</div>
+    );
+  }
+
+  return <MobileOverlay>{content}</MobileOverlay>;
 }
 
-/**
- * Enhanced Multi-Select Card (when multiple users are selected)
- */
 function EnhancedMultiSelectCard({
   selectedUsers,
   hasExistingConnection,
@@ -1952,108 +1870,99 @@ function EnhancedMultiSelectCard({
   onClearSelection: () => void;
   isMobile: boolean;
 }) {
-  return (
-    <div className="absolute top-4 right-4 max-w-[300px] z-50">
-      <Card className="shadow-lg border-blue-200">
-        <CardContent className="pt-5 px-5 pb-4">
-          <div className="flex justify-between items-start mb-1">
-            <h3 className="font-semibold text-sm flex items-center">
-              <Users className="h-4 w-4 mr-1.5" />
-              {selectedUsers.length} Users Selected
-            </h3>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-full h-8 w-8"
-              onClick={onClearSelection}
+  const content = (
+    <Card className="shadow-xl border-blue-200 rounded-2xl overflow-hidden">
+      <CardContent className={isMobile ? "pt-3 px-3 pb-3" : "pt-5 px-5 pb-4"}>
+        <div className="flex justify-between items-start mb-1">
+          <h3
+            className={
+              isMobile
+                ? "font-semibold text-[13px] flex items-center"
+                : "font-semibold text-sm flex items-center"
+            }
+          >
+            <Users className={isMobile ? "h-4 w-4 mr-1" : "h-4 w-4 mr-1.5"} />
+            {selectedUsers.length} Users Selected
+          </h3>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={
+              isMobile ? "rounded-full h-7 w-7" : "rounded-full h-8 w-8"
+            }
+            onClick={onClearSelection}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+        <p
+          className={
+            isMobile
+              ? "text-[10px] text-gray-500 mb-2"
+              : "text-xs text-gray-500 mb-3"
+          }
+        >
+          {hasExistingConnection
+            ? "Some of these users are already connected"
+            : "These users are not directly connected"}
+        </p>
+
+        <div
+          className={
+            isMobile
+              ? "flex flex-wrap gap-1 mb-3 max-h-[40vh] overflow-auto pr-1"
+              : "flex flex-wrap gap-1 mb-4"
+          }
+        >
+          {selectedUsers.map((user) => (
+            <Badge
+              key={user._id}
+              variant="secondary"
+              className={isMobile ? "text-[10px] py-0 px-1" : "text-xs"}
             >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-          <p className="text-xs text-gray-500 mb-3">
-            {hasExistingConnection
-              ? "Some of these users are already connected"
-              : "These users are not directly connected"}
-          </p>
+              {user.username}
+            </Badge>
+          ))}
+        </div>
 
-          <div className="flex flex-wrap gap-1 mb-4">
-            {selectedUsers.map((user) => (
-              <Badge key={user._id} variant="secondary" className="text-xs">
-                {user.username}
-              </Badge>
-            ))}
-          </div>
-
-          <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
+          <Button
+            size="sm"
+            className={isMobile ? "w-full h-9 text-[13px]" : "w-full"}
+            onClick={onCreateConnections}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Connect Users
+          </Button>
+          {hasExistingConnection && (
             <Button
               size="sm"
-              onClick={onCreateConnections}
-              className="w-full flex items-center justify-center gap-1"
+              variant="outline"
+              className={
+                isMobile
+                  ? "w-full h-9 text-[13px] border-red-200 hover:bg-red-50 hover:text-red-600"
+                  : "w-full border-red-200 hover:bg-red-50 hover:text-red-600"
+              }
+              onClick={onDeleteConnections}
             >
-              <Plus className="h-4 w-4" />
-              Connect Users
+              <Unlink className="h-4 w-4 mr-1" />
+              Remove Connections
             </Button>
-            {hasExistingConnection && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="w-full flex items-center justify-center gap-1 border-red-200 hover:bg-red-50 hover:text-red-600"
-                onClick={onDeleteConnections}
-              >
-                <Unlink className="h-4 w-4" />
-                Remove Connections
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
-}
-/**
- * Legend
- */
-function Legend({ isMobile }: { isMobile: boolean }) {
-  return (
-    <div className="absolute bottom-4 right-4 z-40">
-      <Card className="shadow-lg border-slate-200 bg-white/90 backdrop-blur">
-        <CardContent className="p-3">
-          <h4 className="text-xs font-semibold mb-2">Legend</h4>
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <div className="rounded-full bg-amber-500 text-white text-[8px] flex items-center justify-center h-3 w-3">
-                H
-              </div>
-              <span className="text-xs">Host User</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="rounded-full bg-white border border-gray-200 text-[8px] flex items-center justify-center h-3 w-3">
-                U
-              </div>
-              <span className="text-xs">Connection User</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="rounded-full bg-indigo-500 text-white text-[8px] flex items-center justify-center h-3 w-3">
-                C
-              </div>
-              <span className="text-xs">Mutual Connection Group</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="rounded-full bg-blue-600 text-white text-[8px] flex items-center justify-center h-3 w-3">
-                3
-              </div>
-              <span className="text-xs">Connection Count</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
+
+  if (!isMobile) {
+    return (
+      <div className="absolute top-4 right-4 max-w-[300px] z-50">{content}</div>
+    );
+  }
+
+  return <MobileOverlay>{content}</MobileOverlay>;
 }
 
-/**
- * Main Hub-and-Circle Graph Component with enhanced features
- */
 export default function HubCircleGraph({
   host,
   users = [],
@@ -2085,7 +1994,6 @@ export default function HubCircleGraph({
   const [searchResults, setSearchResults] = useState<string[]>([]);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  // Detect mobile view
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < GRAPH_CONFIG.MOBILE.BREAKPOINT);
@@ -2095,7 +2003,6 @@ export default function HubCircleGraph({
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // Prevent text selection while panning
   useEffect(() => {
     const handleSelectStart = (e: Event) => {
       if (isPanMode) {
@@ -2110,7 +2017,6 @@ export default function HubCircleGraph({
     };
   }, [isPanMode]);
 
-  // Handle search
   useEffect(() => {
     if (!searchQuery.trim()) {
       setSearchResults([]);
@@ -2129,7 +2035,6 @@ export default function HubCircleGraph({
     setSearchResults(matches);
   }, [searchQuery, users]);
 
-  // Add CSS class to disable text selection in pan mode
   useEffect(() => {
     if (svgRef.current) {
       if (isPanMode) {
@@ -2140,12 +2045,10 @@ export default function HubCircleGraph({
     }
   }, [isPanMode]);
 
-  // Hub-and-Spoke Layout Calculation with circle detection
   const layoutData = useMemo(() => {
     const centerX = width / 2;
     const centerY = height / 2;
 
-    // Calculate optimal positions with centralized circle visualization
     const layout = LayoutEngine.calculateOptimalPositions(
       users,
       connections,
@@ -2163,7 +2066,6 @@ export default function HubCircleGraph({
     };
   }, [users, connections, width, height, isMobile]);
 
-  // Get currently connected users for the selected user
   const getConnectedUsers = useCallback(
     (userId: string): User[] => {
       const directConnections =
@@ -2177,7 +2079,6 @@ export default function HubCircleGraph({
     [layoutData.connectionData]
   );
 
-  // Get connection details between two users
   const getConnectionBetweenUsers = useCallback(
     (userAId: string, userBId: string): Connection | null => {
       const connection = layoutData.connectionData.connectionDetailMap
@@ -2188,7 +2089,6 @@ export default function HubCircleGraph({
     [layoutData.connectionData]
   );
 
-  // Check if two users are directly connected
   const areUsersDirectlyConnected = useCallback(
     (userAId: string, userBId: string): boolean => {
       const userAConnections =
@@ -2198,7 +2098,6 @@ export default function HubCircleGraph({
     [layoutData.connectionData]
   );
 
-  // Check if any of the selected users are connected
   const checkForExistingConnections = useCallback((): boolean => {
     if (selectedUsers.length < 2) return false;
 
@@ -2212,7 +2111,6 @@ export default function HubCircleGraph({
     return false;
   }, [selectedUsers, areUsersDirectlyConnected]);
 
-  // Find circle by user ID
   const findCircleForUser = useCallback(
     (userId: string): string | null => {
       for (const circleNode of layoutData.circleNodes) {
@@ -2225,7 +2123,6 @@ export default function HubCircleGraph({
     [layoutData.circleNodes]
   );
 
-  // Get user's micro circles
   const getUserMicroCircles = useCallback(
     (userId: string) => {
       if (!microCircles) return [];
@@ -2243,16 +2140,13 @@ export default function HubCircleGraph({
     [microCircles]
   );
 
-  // Interaction handlers
   const handleSpokeClick = useCallback(
     (userId: string) => {
-      // If already selected, deselect
       if (selectedUsers.includes(userId)) {
         setSelectedUsers((prev) => prev.filter((id) => id !== userId));
         return;
       }
 
-      // Add to selection
       setSelectedUsers((prev) => [...prev, userId]);
     },
     [selectedUsers]
@@ -2261,7 +2155,6 @@ export default function HubCircleGraph({
   const handleCreateConnections = useCallback(() => {
     if (selectedUsers.length < 2) return;
 
-    // Use batch connection creation
     if (onCreateMultipleConnections) {
       const connectionPairs = [];
       for (let i = 0; i < selectedUsers.length; i++) {
@@ -2278,9 +2171,7 @@ export default function HubCircleGraph({
       if (connectionPairs.length > 0) {
         onCreateMultipleConnections(connectionPairs);
       }
-    }
-    // Fallback to individual connections
-    else if (onCreateConnection) {
+    } else if (onCreateConnection) {
       for (let i = 0; i < selectedUsers.length; i++) {
         for (let j = i + 1; j < selectedUsers.length; j++) {
           if (!areUsersDirectlyConnected(selectedUsers[i], selectedUsers[j])) {
@@ -2290,7 +2181,6 @@ export default function HubCircleGraph({
       }
     }
 
-    // Clear selection after creating connections
     setSelectedUsers([]);
   }, [
     selectedUsers,
@@ -2302,7 +2192,6 @@ export default function HubCircleGraph({
   const handleDeleteConnections = useCallback(() => {
     if (selectedUsers.length < 2) return;
 
-    // Use batch deletion
     if (onDeleteMultipleConnections) {
       const connectionIds = [];
       for (let i = 0; i < selectedUsers.length; i++) {
@@ -2320,9 +2209,7 @@ export default function HubCircleGraph({
       if (connectionIds.length > 0) {
         onDeleteMultipleConnections(connectionIds);
       }
-    }
-    // Fallback to individual deletions
-    else if (onDeleteConnection) {
+    } else if (onDeleteConnection) {
       for (let i = 0; i < selectedUsers.length; i++) {
         for (let j = i + 1; j < selectedUsers.length; j++) {
           const connection = getConnectionBetweenUsers(
@@ -2336,7 +2223,6 @@ export default function HubCircleGraph({
       }
     }
 
-    // Clear selection after deleting connections
     setSelectedUsers([]);
   }, [
     selectedUsers,
@@ -2345,7 +2231,6 @@ export default function HubCircleGraph({
     onDeleteConnection,
   ]);
 
-  // Enhanced pan and zoom handlers with mobile support
   const handleWheel = useCallback(
     (e: React.WheelEvent<SVGSVGElement>) => {
       if (!isPanMode) return;
@@ -2374,7 +2259,6 @@ export default function HubCircleGraph({
     [isPanMode, viewBox]
   );
 
-  // Mouse event handlers
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
       if (isPanMode) {
@@ -2393,7 +2277,6 @@ export default function HubCircleGraph({
       if (!drag || !isPanMode) return;
       e.preventDefault();
 
-      // Increase sensitivity from 0.3 to 1.0
       const dx = (((e.clientX - drag.x) * viewBox[2]) / width) * 1.0;
       const dy = (((e.clientY - drag.y) * viewBox[3]) / height) * 1.0;
 
@@ -2410,7 +2293,6 @@ export default function HubCircleGraph({
     setDrag(null);
   }, [isPanMode]);
 
-  // Touch event handlers for mobile
   const handleTouchStart = useCallback(
     (e: React.TouchEvent<SVGSVGElement>) => {
       if (isPanMode) {
@@ -2429,7 +2311,6 @@ export default function HubCircleGraph({
       e.preventDefault();
 
       const touch = e.touches[0];
-      // Increase sensitivity from 0.3 to 1.0
       const dx = (((touch.clientX - drag.x) * viewBox[2]) / width) * 1.0;
       const dy = (((touch.clientY - drag.y) * viewBox[3]) / height) * 1.0;
 
@@ -2440,16 +2321,13 @@ export default function HubCircleGraph({
   );
 
   const handleTouchEnd = useCallback(() => {
-    // If it was a quick tap and not a drag (less than 200ms), consider it a tap
     if (touchStartTime && Date.now() - touchStartTime < 200) {
-      // Handle as tap if needed
     }
 
     setDrag(null);
     setTouchStartTime(null);
   }, [touchStartTime]);
 
-  // Control functions
   const zoomIn = useCallback(
     () =>
       setViewBox(([vx, vy, vw, vh]) => [
@@ -2478,7 +2356,6 @@ export default function HubCircleGraph({
   );
 
   const fitView = useCallback(() => {
-    // Get all node positions to calculate bounds
     const positions = [
       ...(layoutData.userPositions || []).map((pos) => ({
         x: pos.x,
@@ -2492,7 +2369,6 @@ export default function HubCircleGraph({
       return;
     }
 
-    // Calculate bounds
     const minX = Math.min(...positions.map((p) => p.x)) - 150;
     const minY = Math.min(...positions.map((p) => p.y)) - 100;
     const maxX = Math.max(...positions.map((p) => p.x)) + 150;
@@ -2501,12 +2377,10 @@ export default function HubCircleGraph({
     const contentWidth = maxX - minX;
     const contentHeight = maxY - minY;
 
-    // Calculate scaling to fit content
     const scaleX = width / contentWidth;
     const scaleY = height / contentHeight;
-    const scale = Math.min(scaleX, scaleY) * 0.95; // 95% to add a bit of margin
+    const scale = Math.min(scaleX, scaleY) * 0.95;
 
-    // Calculate centered view box
     const viewBoxWidth = width / scale;
     const viewBoxHeight = height / scale;
 
@@ -2523,7 +2397,6 @@ export default function HubCircleGraph({
     circleGroups: layoutData.circleNodes.length,
   };
 
-  // Get the primary selected user's info if only one user is selected
   const primarySelectedUserInfo =
     selectedUsers.length === 1
       ? {
@@ -2537,21 +2410,16 @@ export default function HubCircleGraph({
         }
       : null;
 
-  // Check if selected users have existing connections
   const hasExistingConnections = checkForExistingConnections();
 
-  // Get list of selected users as User objects
   const selectedUserObjects = selectedUsers
     .map((id) => users.find((u) => u._id === id))
     .filter(Boolean) as User[];
 
   return (
     <div className="flex flex-col w-full h-full">
-      {/* Two-tier top navigation for better mobile support */}
       <div className="w-full bg-white border-b border-gray-200 shadow-sm">
-        {/* Main navigation row - always visible */}
         <div className="flex items-center justify-between px-4 py-2">
-          {/* Search and controls on left */}
           <div className="flex items-center gap-2 flex-1">
             <div className="relative flex-1 max-w-[300px]">
               <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -2563,7 +2431,6 @@ export default function HubCircleGraph({
               />
             </div>
 
-            {/* Selected count indicator */}
             {stats.selected > 0 && (
               <div className="ml-2 flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-md">
                 <Network className="h-4 w-4 text-blue-600" />
@@ -2573,7 +2440,6 @@ export default function HubCircleGraph({
               </div>
             )}
 
-            {/* Mobile menu toggle */}
             <Button
               variant="ghost"
               size="sm"
@@ -2663,7 +2529,6 @@ export default function HubCircleGraph({
           } md:block border-t border-gray-100 overflow-x-auto`}
         >
           <div className="flex flex-wrap md:flex-nowrap items-center justify-between min-w-[600px] px-4 py-2">
-            {/* Legend */}
             <div className="flex items-center gap-4 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <div className="rounded-full bg-amber-500 text-white text-xs flex items-center justify-center h-5 w-5">
@@ -2726,7 +2591,6 @@ export default function HubCircleGraph({
                 <Maximize className="h-4 w-4 mr-1" /> Fit
               </Button>
 
-              {/* Add Pan Mode Button */}
               <Button
                 variant="outline"
                 size="sm"
@@ -2743,7 +2607,6 @@ export default function HubCircleGraph({
         </div>
       </div>
 
-      {/* Main graph area */}
       <div className="relative flex-grow bg-gray-50 rounded-b-xl overflow-hidden">
         <style jsx global>{`
           .no-text-select {
@@ -2789,11 +2652,9 @@ export default function HubCircleGraph({
           }
         `}</style>
 
-        {/* Selection controls - show different UI based on selection count */}
         {selectedUsers.length === 1 && primarySelectedUserInfo && (
           <SelectionInfoCard
             selectedUser={primarySelectedUserInfo}
-            connectedUsers={[]}
             onClearSelection={() => setSelectedUsers([])}
             isMobile={isMobile}
           />
@@ -2810,7 +2671,6 @@ export default function HubCircleGraph({
           />
         )}
 
-        {/* Main SVG - Now without control panel and legend inside */}
         <svg
           ref={svgRef}
           width="100%"
@@ -2833,8 +2693,6 @@ export default function HubCircleGraph({
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
-          {/* All the existing graph layers */}
-          {/* Layer 2: Hub-to-Spoke connections */}
           <g style={{ zIndex: GRAPH_CONFIG.LAYER.HUB_SPOKE_LINES }}>
             {layoutData.userPositions.map(({ x, y, user }) => (
               <line
@@ -2870,7 +2728,6 @@ export default function HubCircleGraph({
             ))}
           </g>
 
-          {/* Layer 3: Direct user-to-user connections */}
           <g style={{ zIndex: GRAPH_CONFIG.LAYER.CONNECTION_LINES }}>
             {layoutData.processedConnections.map((conn) => {
               if (!conn) return null;
@@ -2891,7 +2748,6 @@ export default function HubCircleGraph({
                   targetY={conn.userBPos.y}
                   color={conn.color}
                   isHighlighted={isHighlighted}
-                  isDirectConnection={true}
                   onMouseEnter={() => setHoverConnection(conn._id)}
                   onMouseLeave={() => setHoverConnection(null)}
                   isMobile={isMobile}
@@ -2900,9 +2756,8 @@ export default function HubCircleGraph({
             })}
           </g>
 
-          {/* Layer 4: Circle connections */}
           <g style={{ zIndex: GRAPH_CONFIG.LAYER.CONNECTION_LINES }}>
-            {layoutData.circleConnections.map((conn, index) => {
+            {layoutData.circleConnections.map((conn) => {
               const isHighlighted =
                 hoverCircle === conn.circleId ||
                 hoverUser === conn.userId ||
@@ -2923,10 +2778,9 @@ export default function HubCircleGraph({
             })}
           </g>
 
-          {/* Layer 4: Connection labels */}
           <g style={{ zIndex: GRAPH_CONFIG.LAYER.CONNECTION_LABELS }}>
             {layoutData.processedConnections
-              .filter((conn) => conn && conn.notes) // Only display labels with content
+              .filter((conn) => conn && conn.notes)
               .map((conn) => {
                 if (!conn) return null;
                 const isHighlighted =
@@ -2941,9 +2795,8 @@ export default function HubCircleGraph({
                     key={`label-${conn._id}`}
                     x={conn.labelPosition.x}
                     y={conn.labelPosition.y}
-                    name={conn.notes || ""} // Use actual content if available
+                    name={conn.notes || ""}
                     color={conn.color}
-                    connectionId={conn._id}
                     isHighlighted={isHighlighted}
                     onDelete={
                       onDeleteConnection
@@ -2956,7 +2809,6 @@ export default function HubCircleGraph({
               })}
           </g>
 
-          {/* Layer 5: Circle nodes */}
           <g style={{ zIndex: GRAPH_CONFIG.LAYER.CONNECTION_LABELS }}>
             {layoutData.circleNodes.map((circle) => (
               <CircleNode
@@ -2976,7 +2828,6 @@ export default function HubCircleGraph({
             ))}
           </g>
 
-          {/* Layer 6: Hub node (center) */}
           <g style={{ zIndex: GRAPH_CONFIG.LAYER.USER_NODES }}>
             <HubNode
               x={layoutData.centerX}
@@ -2984,12 +2835,10 @@ export default function HubCircleGraph({
               avatar={host.profileImage}
               name={host.username}
               email={host.email}
-              highlight={false}
               isMobile={isMobile}
             />
           </g>
 
-          {/* Layer 7: Spoke nodes (users) */}
           <g style={{ zIndex: GRAPH_CONFIG.LAYER.USER_NODES }}>
             {layoutData.userPositions.map(
               ({ x, y, user, directConnections }) => {
@@ -2999,17 +2848,14 @@ export default function HubCircleGraph({
                       ?.color
                   : undefined;
 
-                // Get user's micro circles
                 const userMicroCircles = getUserMicroCircles(user._id);
 
-                // Enhanced highlight logic - strongly highlight nodes connected to selected node
                 const isConnectedToSelected =
                   selectedUsers.length === 1 &&
                   directConnections.some(
                     (connId) => connId === selectedUsers[0]
                   );
 
-                // Check if this user is in search results
                 const isSearchResult = searchResults.includes(user._id);
 
                 return (

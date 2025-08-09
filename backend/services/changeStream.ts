@@ -110,7 +110,6 @@ export class ChangeStreamService {
   }
 
   private async logConnectionDeleted(connectionId: any) {
-    // Since we can't get the deleted document, we need to look it up in the ledger
     const lastEntry = await ConnectionLedger.findOne({
       connectionId: connectionId,
       type: "CREATED",

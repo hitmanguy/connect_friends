@@ -2,10 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   getUserfromSession,
   updateUserSessionExpiry,
-} from "../backend/auth/session";
+} from "../backend/auth/session_for_edge";
 
-const userRoutes = ["/user"];
-const hostRoutes = ["/host"];
+const userRoutes = "/user";
+const hostRoutes = "/host";
 
 export async function middleware(request: NextRequest) {
   const response = (await middlewareAuth(request)) ?? NextResponse.next();
@@ -14,7 +14,8 @@ export async function middleware(request: NextRequest) {
 }
 
 export async function middlewareAuth(request: NextRequest) {
-  if (userRoutes.includes(request.nextUrl.pathname)) {
+  console.log("Middleware auth check for:", request.nextUrl.pathname);
+  if (request.nextUrl.pathname.startsWith(userRoutes)) {
     const user = await getUserfromSession();
     if (!user) {
       return NextResponse.redirect(new URL("/", request.url));
@@ -24,7 +25,7 @@ export async function middlewareAuth(request: NextRequest) {
     }
     return NextResponse.next();
   }
-  if (hostRoutes.includes(request.nextUrl.pathname)) {
+  if (request.nextUrl.pathname.startsWith(hostRoutes)) {
     const user = await getUserfromSession();
     if (!user) {
       return NextResponse.redirect(new URL("/", request.url));
@@ -46,8 +47,6 @@ export async function middlewareAuth(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Skip Next.js internals and all static files, unless found in search params
     "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
   ],
-  // matcher: ['/host/:path*', '/user/:path*']
 };

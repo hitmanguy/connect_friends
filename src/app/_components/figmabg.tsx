@@ -1,10 +1,16 @@
-import Image from 'next/image';
-import svgUrl from '@/assets/vg.svg'; // Import as URL
+import Image from "next/image";
+import svgUrl from "@/assets/vg.svg";
 
 export default function FigmaBackground() {
   return (
     <div className="fixed inset-0">
-      <Image src={svgUrl} alt="Background" fill priority className="object-cover" />
+      <Image
+        src={svgUrl}
+        alt="Background"
+        fill
+        priority
+        className="object-cover"
+      />
     </div>
   );
 }

@@ -43,7 +43,7 @@ export const userRouter = createTRPCRouter({
   uploadProfileImage: protectedProcedure
     .input(
       z.object({
-        imageData: z.string(), // base64 image data
+        imageData: z.string(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -96,5 +96,74 @@ export const userRouter = createTRPCRouter({
         message: "Failed to delete image",
       });
     }
+  }),
+
+  updateUsername: protectedProcedure
+    .input(z.object({ username: z.string().min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const user = await User.findById(ctx.user._id);
+
+        if (!user) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "User not found",
+          });
+        }
+
+        const TEN_MINUTES = 10 * 60 * 1000;
+
+        if (user.updatedAt) {
+          const timeSinceLastChange =
+            Date.now() - new Date(user.updatedAt).getTime();
+
+          if (timeSinceLastChange < TEN_MINUTES) {
+            const remainingSeconds = Math.ceil(
+              (TEN_MINUTES - timeSinceLastChange) / 1000
+            );
+            const remainingMinutes = Math.floor(remainingSeconds / 60);
+            const remainingSecs = remainingSeconds % 60;
+
+            throw new TRPCError({
+              code: "TOO_MANY_REQUESTS",
+              message: `Please wait ${remainingMinutes}:${
+                remainingSecs < 10 ? "0" : ""
+              }${remainingSecs} before changing your username again.`,
+            });
+          }
+        }
+
+        const updatedUser = await User.findByIdAndUpdate(
+          ctx.user._id,
+          { username: input.username },
+          { new: true }
+        );
+
+        return {
+          code: "OK",
+          message: "Username updated successfully",
+          user: {
+            _id: updatedUser._id.toString(),
+            username: updatedUser.username,
+            nextUsernameChangeAllowedAt: new Date(Date.now() + TEN_MINUTES),
+          },
+        };
+      } catch (error) {
+        console.error("Error updating username:", error);
+
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to update username",
+        });
+      }
+    }),
+
+  hostCount: publicProcedure.query(async () => {
+    const count = await User.countDocuments({ UserRole: "host" });
+    return { count };
   }),
 });

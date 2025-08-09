@@ -78,7 +78,6 @@ export default function ProfileImageUpload({
     <Card className="w-full max-w-sm">
       <CardContent className="p-6">
         <div className="flex flex-col items-center space-y-4">
-          {/* Avatar Display */}
           <div className="relative">
             <Avatar className="w-32 h-32 border-4 border-gray-200">
               <AvatarImage
@@ -90,7 +89,6 @@ export default function ProfileImageUpload({
               </AvatarFallback>
             </Avatar>
 
-            {/* Camera Icon Overlay */}
             <Button
               size="sm"
               variant="secondary"
@@ -102,7 +100,6 @@ export default function ProfileImageUpload({
             </Button>
           </div>
 
-          {/* Upload Controls */}
           <div className="flex gap-2">
             <Button
               onClick={handleUploadClick}
@@ -135,7 +132,6 @@ export default function ProfileImageUpload({
             )}
           </div>
 
-          {/* Hidden File Input */}
           <input
             ref={fileInputRef}
             type="file"
@@ -144,7 +140,6 @@ export default function ProfileImageUpload({
             className="hidden"
           />
 
-          {/* Upload Info */}
           <p className="text-xs text-gray-500 text-center">
             Supported: JPG, PNG, GIF (max 5MB)
           </p>

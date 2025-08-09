@@ -8,7 +8,11 @@ import { authRouter } from "./auth";
 import { userRouter } from "./user";
 import { microCircleRouter } from "./microCircle";
 import { connectionRouter } from "./connection";
-import { connection } from "mongoose";
+import { moodRouter } from "./mood";
+import { conversationRouter } from "./conversation";
+import { boardgamesRouter } from "./boardgame";
+import { notesRouter } from "./notes";
+import { trackerRouter } from "./track";
 
 export const appRouter = createTRPCRouter({
   sampleProcedure: publicProcedure.query(async () => {
@@ -37,6 +41,11 @@ export const appRouter = createTRPCRouter({
   user: userRouter,
   connection: connectionRouter,
   microCircle: microCircleRouter,
+  mood: moodRouter,
+  conversation: conversationRouter,
+  boardgame: boardgamesRouter,
+  notes: notesRouter,
+  tracker: trackerRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -3,7 +3,6 @@ import { useState, useRef, useEffect } from "react";
 import { notFound, redirect, useParams } from "next/navigation";
 import { trpc } from "../../../../utils/providers/TrpcProviders";
 import Loading from "./loading";
-import ErrorPage from "./error";
 import FigmaBackground from "../../_components/figmabg";
 
 export default function VerifyPage() {
@@ -172,21 +171,18 @@ export default function VerifyPage() {
             ))}
           </div>
 
-          {/* Error Message */}
           {error && (
             <div className="bg-red-50 text-red-700 p-3 rounded-lg mb-4 text-center">
               {error}
             </div>
           )}
 
-          {/* Success Message */}
           {success && (
             <div className="bg-green-50 text-green-700 p-3 rounded-lg mb-4 text-center">
               Verification successful! Redirecting...
             </div>
           )}
 
-          {/* Verify Button */}
           <button
             onClick={handleVerify}
             disabled={verifying || success}
@@ -223,7 +219,6 @@ export default function VerifyPage() {
             )}
           </button>
 
-          {/* Resend Code Option */}
           <div className="text-center mt-6">
             <p className="text-gray-600">
               Didn't receive a code?{" "}

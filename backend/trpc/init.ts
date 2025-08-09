@@ -46,13 +46,12 @@ class SessionCache {
 
 const sessionCache = new SessionCache();
 
-export const createContext = async (opts: { req: any; res: any }) => {
+export const createContext = async (opts: { req: any }) => {
   const db = await dbConnect();
 
   return {
     db,
     req: opts.req,
-    res: opts.res,
     sessionFactory: {
       async get() {
         const sessionCookie =

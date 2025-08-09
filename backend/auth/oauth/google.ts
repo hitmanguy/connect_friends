@@ -1,7 +1,6 @@
-import { z } from "zod"
-import { OAuthClient } from "./base"
+import { z } from "zod";
+import { OAuthClient } from "./base";
 
-// Google user response schema
 const googleUserSchema = z.object({
   id: z.string(),
   email: z.string().email(),
@@ -11,23 +10,17 @@ const googleUserSchema = z.object({
   picture: z.string().url().optional(),
   verified_email: z.boolean().optional(),
   locale: z.string().optional(),
-})
+});
 
-type GoogleUser = z.infer<typeof googleUserSchema>
+type GoogleUser = z.infer<typeof googleUserSchema>;
 
-// Google OAuth URLs
 const GOOGLE_OAUTH_URLS = {
   auth: "https://accounts.google.com/o/oauth2/v2/auth",
   token: "https://oauth2.googleapis.com/token",
   user: "https://www.googleapis.com/oauth2/v2/userinfo",
-} as const
+} as const;
 
-// Google OAuth scopes
-const GOOGLE_SCOPES = [
-  "openid",
-  "email",
-  "profile",
-] as const
+const GOOGLE_SCOPES = ["openid", "email", "profile"] as const;
 
 export function createGoogleOAuthClient() {
   return new OAuthClient<GoogleUser>({
@@ -47,8 +40,7 @@ export function createGoogleOAuthClient() {
         familyName: data.family_name,
       }),
     },
-  })
+  });
 }
 
-// Export types for use in other files
-export type { GoogleUser }
+export type { GoogleUser };
