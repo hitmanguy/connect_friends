@@ -11,12 +11,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { trpc } from "../../../../utils/providers/TrpcProviders";
 import { CheckCircle, AlertCircle, UserX, LogOut, Users } from "lucide-react";
 import { CharLimitInfo } from "@/app/_components/char_limit";
-import { Metadata } from "next";
-
-export const metadata: Metadata = {
-  title: "Invite User",
-  description: "Send an invitation to a new user",
-};
 
 export default function InvitePage() {
   const { code } = useParams<{ code: string }>();

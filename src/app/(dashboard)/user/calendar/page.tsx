@@ -3,12 +3,6 @@
 import { useState } from "react";
 import MoodCalendar from "@/app/_components/calendar";
 import { trpc } from "../../../../../utils/providers/TrpcProviders";
-import { Metadata } from "next";
-
-export const metadata: Metadata = {
-  title: "Mood Calendar",
-  description: "Track your moods",
-};
 
 export default function MoodPage() {
   const today = new Date();

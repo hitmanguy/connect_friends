@@ -8,12 +8,6 @@ import React, {
   useCallback,
 } from "react";
 import { trpc } from "../../../../utils/providers/TrpcProviders";
-import { Metadata } from "next";
-
-export const metadata: Metadata = {
-  title: "User Dashboard",
-  description: "Manage your account settings and preferences",
-};
 
 const dayKey = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(

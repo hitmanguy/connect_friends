@@ -8,12 +8,6 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import FigmaBackground from "@/app/_components/figmabg";
-import { Metadata } from "next";
-
-export const metadata: Metadata = {
-  title: "Forgot Password",
-  description: "Reset your password",
-};
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");

@@ -4,12 +4,6 @@ import { notFound, redirect, useParams } from "next/navigation";
 import { trpc } from "../../../../utils/providers/TrpcProviders";
 import Loading from "./loading";
 import FigmaBackground from "../../_components/figmabg";
-import { Metadata } from "next";
-
-export const metadata: Metadata = {
-  title: "Verify Account",
-  description: "Verify your account using the OTP sent to your email",
-};
 
 export default function VerifyPage() {
   const params = useParams();
