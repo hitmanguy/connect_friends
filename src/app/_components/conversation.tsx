@@ -33,7 +33,7 @@ export default function ConversationComponent({
   const user = currentUser?.data?.user || currentUser?.data || {};
   const userId = user?._id || currentUser?.data?._id;
   if (!user) {
-    return loading;
+    return loading();
   }
 
   const connectionsQuery = !isHost
