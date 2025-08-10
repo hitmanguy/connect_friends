@@ -8,6 +8,12 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import FigmaBackground from "@/app/_components/figmabg";
+import { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Reset Password",
+  description: "Reset your password",
+};
 
 export default function ResetPasswordPage() {
   const [isLoading, setIsLoading] = useState(true);

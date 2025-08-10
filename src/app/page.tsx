@@ -18,6 +18,12 @@ import Loading from "./loading";
 import { redirect } from "next/navigation";
 import FigmaBackground from "./_components/figmabg";
 import { CharLimitInfo } from "./_components/char_limit";
+import { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "ConnectFriend",
+  description: "Connect with friends and family",
+};
 
 export default function Home() {
   const [authMode, setAuthMode] = useState<"login" | "register">("login");

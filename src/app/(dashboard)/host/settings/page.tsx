@@ -40,6 +40,12 @@ import MicroCircleManager from "../../../_components/MicroCircleManager";
 import InviteManager from "../../../_components/InviteManager";
 import ProfileImageUpload from "../../../_components/profileImageUpload";
 import { CharLimitInfo } from "@/app/_components/char_limit";
+import { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Settings",
+  description: "Manage your account settings",
+};
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("profile");
