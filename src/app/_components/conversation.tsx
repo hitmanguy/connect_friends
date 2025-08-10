@@ -19,6 +19,7 @@ import {
 import clsx from "clsx";
 import { motion, AnimatePresence } from "framer-motion";
 import { trpc } from "../../../utils/providers/TrpcProviders";
+import loading from "../loading";
 
 const MAX_MESSAGE_LENGTH = 5000;
 
@@ -31,6 +32,9 @@ export default function ConversationComponent({
 }) {
   const user = currentUser?.data?.user || currentUser?.data || {};
   const userId = user?._id || currentUser?.data?._id;
+  if (!user) {
+    return loading;
+  }
 
   const connectionsQuery = !isHost
     ? trpc.connection.getUserConnections.useQuery()
