@@ -627,28 +627,28 @@ const UnoGame: React.FC = () => {
   if (phase === "setup") {
     return (
       <div className="min-h-screen bg-white">
-        <div className="max-w-5xl mx-auto p-4 sm:p-6">
+        <div className="mx-auto w-full max-w-5xl px-3 sm:px-6 py-4">
           <div className="bg-white rounded-2xl shadow border border-sky-200 p-4 sm:p-6">
-            <h1 className="text-2xl sm:text-3xl font-semibold text-sky-700 mb-4">
+            <h1 className="text-xl sm:text-3xl font-semibold text-sky-700 mb-4">
               UNO
             </h1>
 
-            <div className="flex gap-3 sm:gap-4 mb-4">
+            <div className="flex gap-2 sm:gap-4 mb-4">
               <button
-                className={`px-4 py-2 rounded-md border transition-all hover:-translate-y-0.5 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
+                className={`flex-1 px-3 sm:px-4 py-2 rounded-md border text-sm sm:text-base transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
                   mode === "bots"
                     ? "bg-sky-600 text-white border-sky-600 shadow"
-                    : "border-sky-300 text-sky-700 bg-white"
+                    : "border-sky-300 text-sky-700 bg-white hover:bg-sky-50"
                 }`}
                 onClick={() => setMode("bots")}
               >
                 Play with Bots
               </button>
               <button
-                className={`px-4 py-2 rounded-md border transition-all hover:-translate-y-0.5 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
+                className={`flex-1 px-3 sm:px-4 py-2 rounded-md border text-sm sm:text-base transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
                   mode === "multiplayer"
                     ? "bg-sky-600 text-white border-sky-600 shadow"
-                    : "border-sky-300 text-sky-700 bg-white"
+                    : "border-sky-300 text-sky-700 bg-white hover:bg-sky-50"
                 }`}
                 onClick={() => setMode("multiplayer")}
               >
@@ -656,35 +656,44 @@ const UnoGame: React.FC = () => {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="p-4 rounded-xl border border-sky-200 bg-sky-50/40">
+            {/* Responsive layout: stacked on mobile, 2 columns on lg */}
+            <div className="flex flex-col gap-4 lg:grid lg:grid-cols-2 lg:gap-6">
+              {/* Create / Settings Card */}
+              <div className="p-3 sm:p-4 rounded-xl border border-sky-200 bg-sky-50/40">
                 {mode === "multiplayer" && (
-                  <div className="mb-4">
-                    <label className="text-sm text-gray-700">Max Players</label>
+                  <div className="mb-3">
+                    <label className="text-xs sm:text-sm text-gray-700">
+                      Max Players
+                    </label>
                     <input
                       type="number"
                       min={2}
                       max={10}
                       value={maxPlayers}
                       onChange={(e) => setMaxPlayers(Number(e.target.value))}
-                      className="mt-1 w-full border rounded-md px-3 py-2"
+                      className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
                     />
                   </div>
                 )}
 
                 {mode === "multiplayer" && (
                   <div className="flex items-center justify-between gap-3 mb-3">
-                    <label className="text-sm text-gray-700">Enable Bots</label>
+                    <label className="text-xs sm:text-sm text-gray-700">
+                      Enable Bots
+                    </label>
                     <input
                       type="checkbox"
                       checked={enableBots}
                       onChange={(e) => setEnableBots(e.target.checked)}
+                      className="h-4 w-4"
                     />
                   </div>
                 )}
 
-                <div className="mb-2">
-                  <label className="text-sm text-gray-700">Bots</label>
+                <div className="mb-3">
+                  <label className="text-xs sm:text-sm text-gray-700">
+                    Bots
+                  </label>
                   <input
                     type="number"
                     min={mode === "bots" ? 1 : 0}
@@ -695,18 +704,16 @@ const UnoGame: React.FC = () => {
                       mode === "bots" ? 9 : maxBotsAllowedMp
                     )}
                     onChange={(e) => setBotCount(Number(e.target.value))}
-                    className="mt-1 w-full border rounded-md px-3 py-2 disabled:opacity-50"
+                    className="mt-1 w-full border rounded-md px-3 py-2 text-sm disabled:opacity-50"
                   />
                   {mode === "multiplayer" && (
-                    <div className="text-xs mt-1">
+                    <div className="text-[11px] mt-1 leading-snug">
                       <span className="text-gray-600">
-                        Max bots allowed with current max players:{" "}
-                        {maxBotsAllowedMp}
+                        Max bots w/ current max players: {maxBotsAllowedMp}
                       </span>
                       {(botsTooManyMp || invalidMpCombo) && (
                         <div className="text-red-600 mt-1">
-                          At least 2 human players required. Reduce bots or
-                          increase max players.
+                          Need at least 2 human players.
                         </div>
                       )}
                     </div>
@@ -714,7 +721,7 @@ const UnoGame: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="text-sm text-gray-700">
+                  <label className="text-xs sm:text-sm text-gray-700">
                     Turn Time (seconds)
                   </label>
                   <input
@@ -723,12 +730,12 @@ const UnoGame: React.FC = () => {
                     max={120}
                     value={turnTimeLimit}
                     onChange={(e) => setTurnTimeLimit(Number(e.target.value))}
-                    className="mt-1 w-full border rounded-md px-3 py-2"
+                    className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
                   />
                 </div>
 
                 <button
-                  className="mt-6 w-full px-4 py-2 rounded-lg bg-sky-600 text-white hover:bg-sky-700 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="mt-5 w-full px-4 py-2 rounded-lg bg-sky-600 text-white text-sm sm:text-base hover:bg-sky-700 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={handleCreate}
                   disabled={
                     createRoom.isPending || botsTooManyMp || invalidMpCombo
@@ -738,29 +745,38 @@ const UnoGame: React.FC = () => {
                 </button>
               </div>
 
-              <div className="p-4 rounded-xl border border-sky-200">
-                <h3 className="font-medium mb-3 text-sky-700">Join by Code</h3>
-                <div className="flex gap-2">
+              {/* Join Card */}
+              <div className="p-3 sm:p-4 rounded-xl border border-sky-200 bg-white">
+                <h3 className="font-medium mb-3 text-sky-700 text-sm sm:text-base">
+                  Join by Code
+                </h3>
+                <div className="flex flex-col xs:flex-row gap-2">
                   <input
                     value={joinCode}
                     onChange={(e) => setJoinCode(e.target.value.trim())}
                     placeholder="Enter room code"
-                    className="flex-1 border rounded-md px-3 py-2"
+                    className="flex-1 border rounded-md px-3 py-2 text-sm"
                   />
                   <button
-                    className="px-4 py-2 rounded-md bg-sky-600 text-white hover:bg-sky-700 active:scale-95 transition-all"
+                    className="w-full xs:w-auto px-4 py-2 rounded-md bg-sky-600 text-white text-sm hover:bg-sky-700 active:scale-95 transition-all disabled:opacity-50"
                     onClick={() => joinCode && handleJoin(joinCode)}
+                    disabled={joinRoom.isPending || !joinCode}
                   >
-                    Join
+                    {joinRoom.isPending ? "Joining..." : "Join"}
                   </button>
                 </div>
+                {joinRoom.isError && (
+                  <div className="mt-2 text-xs text-red-600">
+                    {(joinRoom.error as any)?.message || "Failed to join"}
+                  </div>
+                )}
               </div>
             </div>
 
-            <details className="mt-6 group">
+            <details className="mt-5 group">
               <summary className="list-none cursor-pointer select-none">
                 <div className="flex items-center justify-between rounded-xl border border-sky-200 bg-white/80 px-4 py-3">
-                  <span className="text-sky-700 font-medium">
+                  <span className="text-sky-700 font-medium text-sm sm:text-base">
                     UNO Rules (tap to expand)
                   </span>
                   <span className="text-sky-500 group-open:rotate-180 transition-transform">
@@ -768,29 +784,26 @@ const UnoGame: React.FC = () => {
                   </span>
                 </div>
               </summary>
-              <div className="mt-3 rounded-xl border border-sky-100 bg-sky-50/50 p-4 text-sm text-slate-700">
-                <ul className="list-disc pl-5 space-y-1">
-                  <li>Match the top card by color or number/action to play.</li>
+              <div className="mt-3 rounded-xl border border-sky-100 bg-sky-50/50 p-4 text-[12px] sm:text-sm text-slate-700 leading-relaxed">
+                <ul className="list-disc pl-5 space-y-1.5">
+                  <li>Match the top card by color or number/action.</li>
                   <li>
-                    Wild can change to any color. Wild Draw 4 forces next player
-                    to draw 4 and skip; you may only play it if you have no card
-                    of the current color.
+                    Wild changes color. Wild Draw 4: only if no card of current
+                    color.
                   </li>
-                  <li>Draw 2 makes next player draw 2 and skip.</li>
-                  <li>Skip makes the next player miss a turn.</li>
-                  <li>Reverse flips direction (2 players: acts like Skip).</li>
+                  <li>Draw 2 / Wild Draw 4 make next player draw & skip.</li>
                   <li>
-                    On your turn you may play one card or draw one card. If you
-                    can play after drawing, you may play immediately (server
-                    rules apply).
+                    Skip: next player misses turn. Reverse flips direction.
                   </li>
                   <li>
-                    When you have 2 cards, use the UNO button before playing to
-                    avoid a penalty.
+                    Draw one if you can’t play. If playable after drawing, you
+                    can play.
                   </li>
                   <li>
-                    First player to empty their hand finishes; round ends when
-                    all finish or per room settings.
+                    Call UNO at 2 cards before playing to avoid a penalty.
+                  </li>
+                  <li>
+                    Finish first; round ends when all finish or rules end it.
                   </li>
                 </ul>
               </div>
@@ -815,7 +828,6 @@ const UnoGame: React.FC = () => {
       : Math.max(0, (room?.maxPlayers ?? 4) - 2);
     const humansInRoom = room.players.filter((p) => !p.isBot).length;
 
-    // NEW: readiness gating
     const allHumansReady = room.players
       .filter((p) => !p.isBot)
       .every((p) => p.isReady);
@@ -1000,57 +1012,60 @@ const UnoGame: React.FC = () => {
 
       <div className="relative max-w-7xl mx-auto p-3 sm:p-6">
         <div className="bg-white/90 backdrop-blur rounded-2xl shadow border border-sky-200">
-          <div className="flex items-center justify-between p-3 sm:p-4 border-b">
-            <h2 className="text-xl sm:text-2xl font-semibold text-sky-700">
-              {phase === "finished" ? "Game Over" : "UNO Game"}
-            </h2>
-            <div className="flex items-center gap-2 sm:gap-3">
+          <div className="p-2 sm:p-4 border-b flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <h2 className="text-lg sm:text-2xl font-semibold text-sky-700 truncate">
+                {phase === "finished" ? "Game Over" : "UNO Game"}
+              </h2>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() =>
+                    setChatOpen((v) => {
+                      const nv = !v;
+                      if (nv) setChatUnread(0);
+                      return nv;
+                    })
+                  }
+                  className="relative hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-md bg-sky-600 text-white hover:bg-sky-700 active:scale-95 transition-all text-sm"
+                  title="Chat"
+                >
+                  Chat
+                  {chatUnread > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-[11px] leading-[18px] text-white text-center">
+                      {chatUnread > 9 ? "9+" : chatUnread}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={handleLeave}
+                  className="px-3 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 active:scale-95 transition-all text-sm sm:text-base"
+                >
+                  Leave
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
               {state && (
-                <div className="px-2.5 py-1 rounded-md bg-sky-50 border border-sky-200 text-sky-700 text-xs sm:text-sm">
-                  Turn:{" "}
+                <div className="px-2 py-1 rounded-md bg-sky-50 border border-sky-200 text-sky-700 text-[11px] sm:text-xs leading-tight flex items-center gap-1">
                   <span className="font-medium">
                     {state.players[state.currentPlayer]?.username ?? "?"}
                   </span>
-                  <span className="mx-1">•</span>
-                  Color:{" "}
-                  <span className="capitalize font-medium">
-                    {state.currentColor}
-                  </span>
-                  <span className="mx-1">•</span>
-                  Time: <span className="font-medium">{timeLeft}s</span>
+                  <span className="opacity-50">•</span>
+                  <span className="capitalize">{state.currentColor}</span>
+                  <span className="opacity-50">•</span>
+                  <span>{timeLeft}s</span>
                 </div>
               )}
               {room && (
-                <div className="text-xs sm:text-sm text-sky-700">
-                  Room: {room.id}
+                <div className="px-2 py-1 rounded-md bg-white border border-sky-200 text-sky-700 text-[11px] sm:text-xs font-mono">
+                  {room.id}
                 </div>
               )}
-
-              <button
-                onClick={() =>
-                  setChatOpen((v) => {
-                    const nv = !v;
-                    if (nv) setChatUnread(0);
-                    return nv;
-                  })
-                }
-                className="relative hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-md bg-sky-600 text-white hover:bg-sky-700 active:scale-95 transition-all"
-                title="Chat"
-              >
-                Chat
-                {chatUnread > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-[11px] leading-[18px] text-white text-center">
-                    {chatUnread > 9 ? "9+" : chatUnread}
-                  </span>
-                )}
-              </button>
-
-              <button
-                onClick={handleLeave}
-                className="px-3 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 active:scale-95 transition-all"
-              >
-                Leave
-              </button>
+              {chatUnread > 0 && !chatOpen && (
+                <div className="sm:hidden px-2 py-1 rounded-md bg-red-100 text-red-600 text-[11px] font-medium">
+                  {chatUnread} unread
+                </div>
+              )}
             </div>
           </div>
           {state ? (
