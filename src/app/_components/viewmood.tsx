@@ -363,7 +363,7 @@ export default function ViewMoodEntry({
                   </div>
                 </motion.div>
               )}
-              {moodEntry.music?.title && (
+              {moodEntry.music?.url && (
                 <motion.div
                   variants={itemVariants}
                   className="bg-white rounded-xl border border-blue-100 shadow-sm overflow-hidden"

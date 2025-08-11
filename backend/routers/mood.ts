@@ -645,6 +645,7 @@ export const moodRouter = createTRPCRouter({
               localDate: 1,
               mood: 1,
               activities: 1,
+              music: 1,
 
               user: {
                 _id: { $toString: "$userId" },
@@ -652,9 +653,7 @@ export const moodRouter = createTRPCRouter({
                 profileImage: "$creatorInfo.profileImage",
                 email: "$creatorInfo.email",
               },
-
               generalNotes: "$notes",
-
               directCustomVersion: {
                 $cond: {
                   if: { $gt: [{ $size: "$directCustomVersion" }, 0] },
@@ -667,7 +666,6 @@ export const moodRouter = createTRPCRouter({
                   else: null,
                 },
               },
-
               circleCustomVersions: {
                 $map: {
                   input: "$circleVersions",
@@ -678,7 +676,6 @@ export const moodRouter = createTRPCRouter({
                   },
                 },
               },
-
               media: 1,
             },
           },
@@ -689,9 +686,9 @@ export const moodRouter = createTRPCRouter({
               localDate: 1,
               mood: 1,
               activities: 1,
+              music: 1,
 
               user: 1,
-
               notes: {
                 $cond: {
                   if: "$directCustomVersion.notes",
@@ -721,7 +718,6 @@ export const moodRouter = createTRPCRouter({
                   },
                 },
               },
-
               media: {
                 $cond: {
                   if: { $isArray: "$directCustomVersion.mediaurls" },
@@ -790,7 +786,6 @@ export const moodRouter = createTRPCRouter({
                   },
                 },
               },
-
               customVersion: {
                 directVersion: "$directCustomVersion",
                 circleVersions: "$circleCustomVersions",
