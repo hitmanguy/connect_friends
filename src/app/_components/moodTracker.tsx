@@ -276,6 +276,29 @@ const extractTitleFromUrl = async (
   }
 };
 
+async function uploadViaApi(file: File): Promise<{
+  url: string;
+  type: "image" | "video";
+  public_id: string;
+}> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch("/api/upload/cloudinary", {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    let message = "Upload failed";
+    try {
+      const j = await res.json();
+      message = j?.error || message;
+    } catch {}
+    throw new Error(`${message} (status ${res.status})`);
+  }
+  const data = await res.json();
+  return { url: data.url, type: data.type, public_id: data.public_id };
+}
+
 export default function MoodTrackerPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -335,6 +358,7 @@ export default function MoodTrackerPage() {
   const [shareMediaWithAll, setShareMediaWithAll] = useState<boolean>(false);
 
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  console.log("User timezone:", timezone);
 
   const currentUserQuery = trpc.auth.getCurrentUser.useQuery({
     fulluser: true,
@@ -380,8 +404,10 @@ export default function MoodTrackerPage() {
   }, []);
 
   useEffect(() => {
+    console.log("Connections data:", connections);
+
     const handleClick = (e: MouseEvent) => {
-      // console.log("Click detected at:", e.clientX, e.clientY);
+      console.log("Click detected at:", e.clientX, e.clientY);
     };
 
     document.addEventListener("click", handleClick);
@@ -607,6 +633,7 @@ export default function MoodTrackerPage() {
   );
 
   const toggleConnectionCustomize = useCallback((connectionId: string) => {
+    console.log("Toggle customize for connection:", connectionId);
     setCustomizeConnections((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(connectionId)) {
@@ -619,6 +646,7 @@ export default function MoodTrackerPage() {
   }, []);
 
   const toggleCircleCustomize = useCallback((circleId: string) => {
+    console.log("Toggle customize for circle:", circleId);
     setCustomizeCircles((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(circleId)) {
@@ -632,6 +660,8 @@ export default function MoodTrackerPage() {
 
   const toggleConnectionShare = useCallback(
     (connectionId: string) => {
+      console.log("Toggle connection clicked:", connectionId);
+
       setPendingClicks((prev) => {
         const newSet = new Set(prev);
         newSet.add(`conn-${connectionId}`);
@@ -662,6 +692,8 @@ export default function MoodTrackerPage() {
           });
         } else {
           const allMediaIds = prev.media.map((media) => media.id);
+
+          console.log("Adding connection with media IDs:", allMediaIds);
 
           newSharing = {
             ...prev.sharing,
@@ -951,53 +983,70 @@ export default function MoodTrackerPage() {
     [microCircles]
   );
 
-  const getBase64FromFile = useCallback((file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = (error) => reject(error);
-    });
-  }, []);
-
   const handleSubmit = useCallback(async () => {
     setSubmitting(true);
-
     try {
-      const mediaFiles = moodData.media.filter((media) => media.file);
-      const mediaBase64 = await Promise.all(
-        mediaFiles.map((media) => getBase64FromFile(media.file!))
+      const mediaNeedingUpload = moodData.media.filter((m) => m.file);
+      const tooBig = mediaNeedingUpload.find(
+        (m) => (m.file?.size || 0) > MAX_FILE_SIZE
+      );
+      if (tooBig) {
+        setSubmitting(false);
+        setMediaError(
+          `Each file must be <= ${Math.round(MAX_FILE_SIZE / (1024 * 1024))}MB.`
+        );
+        return;
+      }
+
+      const uploaded = await Promise.all(
+        mediaNeedingUpload.map((m) => uploadViaApi(m.file!))
       );
 
-      const mediaIdToIndexMap: Record<string, number> = {};
-      mediaFiles.forEach((media, index) => {
-        mediaIdToIndexMap[media.id] = index;
+      const uploadedMap = new Map<
+        string,
+        { url: string; type: "image" | "video"; publicId: string }
+      >();
+      uploaded.forEach((u, i) => {
+        const localId = mediaNeedingUpload[i].id;
+        uploadedMap.set(localId, {
+          url: u.url,
+          type: u.type,
+          publicId: u.public_id,
+        });
       });
 
       const existingCloudinaryMedia = moodData.media
-        .filter((media) => !media.file)
-        .map((media) => ({
-          id: media.id,
-          url: media.url,
-          type: media.type,
-        }));
+        .map((m) => {
+          const up = uploadedMap.get(m.id);
+          if (!up && m.file) return null;
+          const url = up?.url ?? m.url;
+          const type = up?.type ?? m.type;
+          const publicId = up?.publicId;
+          return { id: m.id, url, type, publicId };
+        })
+        .filter(
+          (
+            x
+          ): x is {
+            id: string;
+            url: string;
+            type: "image" | "video";
+            publicId: string;
+          } => !!x && typeof x.publicId === "string" && x.publicId.length > 0
+        );
 
       const musicData = { ...moodData.music };
       if (musicData.url) {
         const validUrl = getValidUrl(musicData.url);
         if (validUrl) {
           musicData.url = validUrl;
-
-          // Try to extract title if needed
           if (!musicData.title || musicData.title === "") {
             try {
-              const extractedTitle = await extractTitleFromUrl(
+              musicData.title = await extractTitleFromUrl(
                 validUrl,
                 musicData.platform
               );
-              musicData.title = extractedTitle;
-            } catch (error) {
-              console.error("Error extracting title:", error);
+            } catch {
               musicData.title = "Music";
             }
           }
@@ -1009,14 +1058,10 @@ export default function MoodTrackerPage() {
       const sharingData = {
         isPrivate: moodData.sharing.isPrivate,
         sharedWith: moodData.sharing.selectedConnections,
-        mediaIdToIndexMap,
+        mediaIdToIndexMap: {},
         existingCloudinaryMedia,
         customVersions: moodData.sharing.customVersions.map(
-          ({ userId, notes, mediaIds = [] }) => ({
-            userId,
-            notes,
-            mediaIds,
-          })
+          ({ userId, notes, mediaIds = [] }) => ({ userId, notes, mediaIds })
         ),
         sharedWithCircles: moodData.sharing.selectedCircles.map((circleId) => {
           const customNotes = moodData.sharing.circleCustomNotes.find(
@@ -1047,17 +1092,22 @@ export default function MoodTrackerPage() {
         activities: moodData.activities,
         notes: moodData.notes,
         privateNotes: moodData.privateNotes,
-        media: mediaBase64,
+        media: [],
         music: musicData,
-        sharing: sharingData,
+        sharing: {
+          ...sharingData,
+          existingCloudinaryMedia,
+        },
         timezone: timezone,
       });
+
       window.location.reload();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error submitting mood data:", error);
+      alert(error?.message || "Failed to save mood.");
       setSubmitting(false);
     }
-  }, [moodData, getBase64FromFile, createMoodMutation, microCircles]);
+  }, [moodData, createMoodMutation, microCircles, timezone]);
 
   const SafeUrlEmbed = ({
     url,
@@ -1155,6 +1205,13 @@ export default function MoodTrackerPage() {
 
   if (alreadySubmittedToday) {
     let todayMood = todayMoodQuery.data?.entry;
+    console.log("Today's mood data structure check:", {
+      mood: todayMood?.mood,
+      hasActivities: Array.isArray(todayMood?.activities),
+      activitiesLength: todayMood?.activities?.length,
+      hasNotes: Boolean(todayMood?.notes),
+      hasMedia: Array.isArray(todayMood?.media) && todayMood?.media.length > 0,
+    });
 
     return (
       <ViewMoodEntry

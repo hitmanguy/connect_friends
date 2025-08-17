@@ -5,7 +5,6 @@ import { Mood, MoodType } from "../model/mood";
 import { User } from "../model/auth";
 import { MicroCircle, MicroCircleType } from "../model/microCircle";
 import { TRPCError } from "@trpc/server";
-import { uploadCloudinary } from "../cloudinary/upload";
 import { format } from "date-fns-tz";
 
 export const moodRouter = createTRPCRouter({
@@ -46,7 +45,8 @@ export const moodRouter = createTRPCRouter({
                 z.object({
                   id: z.string(),
                   url: z.string(),
-                  type: z.string(),
+                  type: z.enum(["image", "video"]),
+                  publicId: z.string(),
                 })
               )
               .optional()
@@ -98,7 +98,11 @@ export const moodRouter = createTRPCRouter({
           });
         }
 
-        const mediaEntries = [];
+        const mediaEntries: {
+          url: string;
+          type: "image" | "video";
+          publicId: string;
+        }[] = [];
         const mediaIdToUrlMap = new Map<string, string>();
 
         if (
@@ -106,43 +110,19 @@ export const moodRouter = createTRPCRouter({
           input.sharing.existingCloudinaryMedia.length > 0
         ) {
           for (const existingMedia of input.sharing.existingCloudinaryMedia) {
+            if (!existingMedia.publicId) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: "publicId is required for each media item",
+              });
+            }
             mediaEntries.push({
               url: existingMedia.url,
               type: existingMedia.type,
-              publicId: "",
+              publicId: existingMedia.publicId,
             });
 
             mediaIdToUrlMap.set(existingMedia.id, existingMedia.url);
-          }
-        }
-
-        if (input.media && input.media.length > 0) {
-          for (let i = 0; i < input.media.length; i++) {
-            const mediaItem = input.media[i];
-
-            try {
-              const result = await uploadCloudinary(
-                mediaItem,
-                `mood_${ctx.user._id}_${Date.now()}_${i}`
-              );
-
-              mediaEntries.push({
-                url: result.secure_url,
-                type: result.resource_type === "video" ? "video" : "image",
-                publicId: result.public_id,
-              });
-
-              for (const [mediaId, index] of Object.entries(
-                input.sharing.mediaIdToIndexMap
-              )) {
-                if (index === i) {
-                  mediaIdToUrlMap.set(mediaId, result.secure_url);
-                  break;
-                }
-              }
-            } catch (err) {
-              console.error("Media upload error:", err);
-            }
           }
         }
 

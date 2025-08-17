@@ -11,6 +11,7 @@ export async function uploadCloudinary(imageData: string, publicId: string) {
     const result = await cloudinary.uploader.upload(imageData, {
       folder: "connect_friends",
       public_id: publicId,
+      resource_type: "auto",
       transformation: [
         { width: 200, height: 200, crop: "fill" },
         { quality: "auto" },
