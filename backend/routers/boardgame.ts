@@ -15,6 +15,8 @@ import {
   canPlayCard,
 } from "../boardgames/uno/setup";
 import { User } from "../model/auth";
+import { observable } from "@trpc/server/observable";
+import { EventEmitter } from "events";
 
 type GameServerData = {
   matchID: string;
@@ -53,6 +55,14 @@ function clearTurnTimer(roomId: string) {
   }
 }
 
+function clearBotTimer(roomId: string) {
+  const t = botTimers.get(roomId);
+  if (t) {
+    clearTimeout(t);
+    botTimers.delete(roomId);
+  }
+}
+
 function isBotsTurn(room: MemoryRoom) {
   const state = room.gameServerData?.gameState;
   if (!state || state.gamePhase !== "playing") return false;
@@ -76,6 +86,15 @@ function scheduleTurnTimer(room: MemoryRoom) {
   turnTimers.set(room.id, t);
 }
 
+function emitState(roomId: string) {
+  const mem = gameRoomManager.get(roomId);
+  roomEvents.emit(`state:${roomId}`, {
+    roomId,
+    gameRoom: mem ? toPublicRoom(mem) : null,
+    gameState: mem?.gameServerData?.gameState ?? null,
+  });
+}
+
 function onTurnTimeout(roomId: string) {
   if (!tryLock(roomId)) {
     setTimeout(() => onTurnTimeout(roomId), 60);
@@ -87,21 +106,25 @@ function onTurnTimeout(roomId: string) {
     const state = room.gameServerData.gameState;
     if (state.gamePhase !== "playing") {
       clearTurnTimer(roomId);
+      clearBotTimer(roomId);
+      emitState(roomId);
       return;
     }
     const pid = state.currentPlayer;
     const res = drawCardMove(state, pid);
     if (!res?.error) {
       room.updatedAt = new Date();
-      if (isBotsTurn(room)) scheduleBots(room);
       scheduleTurnTimer(room);
+      if (isBotsTurn(room)) scheduleBots(room);
+      else clearBotTimer(room.id);
+      emitState(roomId);
     }
   } finally {
     unlock(roomId);
   }
 }
 
-const BOT_DELAY_MS = 5000;
+const BOT_DELAY_MS = 2500;
 
 function pickBestColor(hand: UnoGameState["players"][string]["hand"]) {
   const counts: Record<"red" | "blue" | "green" | "yellow", number> = {
@@ -165,11 +188,15 @@ function runOneBotTurn(roomId: string) {
 
     if (state.gamePhase !== "playing") {
       clearTurnTimer(room.id);
+      clearBotTimer(room.id);
       void updateRoomStatus(room.id, "finished", state.finishedOrder ?? []);
     } else {
       scheduleTurnTimer(room);
+      if (isBotsTurn(room)) scheduleBots(room);
+      else clearBotTimer(room.id);
     }
     room.updatedAt = new Date();
+    emitState(room.id);
   } finally {
     unlock(roomId);
   }
@@ -242,9 +269,12 @@ async function updateRoomStatus(
     if (finishedOrder) (patch as any).finishedOrder = finishedOrder;
   }
   await GameRoomModel.updateOne({ id }, { $set: patch }).exec();
+  if (status !== "playing") {
+    clearTurnTimer(id);
+    clearBotTimer(id);
+  }
 }
 
-// Schemas
 const createRoomSchema = z.object({
   mode: z.enum(["bots", "multiplayer"]),
   maxPlayers: z.number().min(2).max(10).default(4),
@@ -288,7 +318,9 @@ function ensureRoomChat(room: any) {
   return room.chat as RoomChatMessage[];
 }
 
-// Add procedures
+const roomEvents = new EventEmitter();
+roomEvents.setMaxListeners(0);
+
 export const boardgamesRouter = createTRPCRouter({
   createGameRoom: protectedProcedure
     .input(createRoomSchema)
@@ -432,6 +464,9 @@ export const boardgamesRouter = createTRPCRouter({
         if (doc.players.length === 0) {
           await GameRoomModel.deleteOne({ id: doc.id }).exec();
           gameRoomManager.delete(doc.id);
+          clearTurnTimer(doc.id);
+          clearBotTimer(doc.id);
+          emitState(doc.id);
           return { code: "OK" as const };
         }
         if (doc.hostId === userId) {
@@ -448,10 +483,14 @@ export const boardgamesRouter = createTRPCRouter({
       if (humansLeft === 0) {
         await GameRoomModel.deleteOne({ id: doc.id }).exec();
         gameRoomManager.delete(doc.id);
+        clearTurnTimer(doc.id);
+        clearBotTimer(doc.id);
+        emitState(doc.id);
         return { code: "OK" as const };
       }
 
       await loadRoomFromDB(doc.id);
+      emitState(doc.id);
       return { code: "OK" as const };
     }),
 
@@ -562,6 +601,13 @@ export const boardgamesRouter = createTRPCRouter({
         },
       });
 
+      const mem = gameRoomManager.get(doc.id)!;
+      scheduleTurnTimer(mem);
+      if (isBotsTurn(mem)) scheduleBots(mem);
+      else clearBotTimer(mem.id);
+
+      emitState(mem.id);
+
       return { gameRoom: doc.toObject() as IGameRoom };
     }),
 
@@ -614,6 +660,7 @@ export const boardgamesRouter = createTRPCRouter({
 
         if (state.gamePhase !== "playing") {
           clearTurnTimer(room.id);
+          clearBotTimer(room.id);
           await updateRoomStatus(
             room.id,
             "finished",
@@ -622,8 +669,11 @@ export const boardgamesRouter = createTRPCRouter({
         } else {
           scheduleTurnTimer(room);
           if (isBotsTurn(room)) scheduleBots(room);
+          else clearBotTimer(room.id);
         }
         room.updatedAt = new Date();
+
+        emitState(room.id);
 
         return { code: "OK" as const, gameState: state };
       } finally {
@@ -641,6 +691,14 @@ export const boardgamesRouter = createTRPCRouter({
       }
       if (!mem)
         throw new TRPCError({ code: "NOT_FOUND", message: "Room not found" });
+      if (mem.gameServerData?.gameState?.gamePhase === "playing") {
+        scheduleTurnTimer(mem);
+        if (isBotsTurn(mem)) scheduleBots(mem);
+        else clearBotTimer(mem.id);
+      } else {
+        clearTurnTimer(mem.id);
+        clearBotTimer(mem.id);
+      }
 
       const isPlayer = mem.players.some(
         (p) => p.userId === ctx.user._id.toString()
@@ -739,4 +797,19 @@ export const boardgamesRouter = createTRPCRouter({
 
       return { ok: true, message: msg };
     }),
+  onState: protectedProcedure.input(roomIdSchema).subscription(({ input }) => {
+    return observable<{ roomId: string; gameRoom: any; gameState: any }>(
+      (emit) => {
+        const key = `state:${input.roomId}`;
+        const handler = (p: any) => emit.next(p);
+        roomEvents.on(key, handler);
+
+        emitState(input.roomId);
+
+        return () => {
+          roomEvents.off(key, handler);
+        };
+      }
+    );
+  }),
 });

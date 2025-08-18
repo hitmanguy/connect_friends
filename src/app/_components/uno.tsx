@@ -244,7 +244,35 @@ const UnoGame: React.FC = () => {
     { roomId: roomId ?? "" },
     {
       enabled: !!roomId,
-      refetchInterval: 1500,
+      refetchInterval: false,
+      refetchOnWindowFocus: false,
+    }
+  );
+
+  const gameStateQuery = trpc.boardgame.getGameState.useQuery(
+    { roomId: roomId ?? "" },
+    {
+      enabled: !!roomId,
+      refetchInterval: false,
+      refetchOnWindowFocus: false,
+    }
+  );
+
+  trpc.boardgame.onState.useSubscription(
+    { roomId: roomId ?? "" },
+    {
+      enabled: !!roomId,
+      onData: (p) => {
+        if (p?.gameRoom) setRoom(p.gameRoom as GameRoom);
+        const s = p?.gameState as UnoGameState | null;
+        if (s) {
+          setState(s);
+          setPhase(s.gamePhase === "finished" ? "finished" : "playing");
+        }
+        if (gameStateQuery.data?.playerID != null) {
+          setPlayerID(gameStateQuery.data.playerID);
+        }
+      },
     }
   );
 
@@ -259,14 +287,6 @@ const UnoGame: React.FC = () => {
       setPhase("setup");
     }
   }, [gameRoomQuery.error]);
-
-  const gameStateQuery = trpc.boardgame.getGameState.useQuery(
-    { roomId: roomId ?? "" },
-    {
-      enabled: !!roomId,
-      refetchInterval: 1000,
-    }
-  );
 
   useEffect(() => {
     const payload = chatQuery.data;
@@ -383,18 +403,28 @@ const UnoGame: React.FC = () => {
     return () => clearTimeout(t);
   }, [state?.gameLog?.length]);
 
+  const myUserId = me?._id ?? null;
+  const derivedPid = useMemo(() => {
+    if (!state || !myUserId) return null;
+    for (const [pid, p] of Object.entries(state.players)) {
+      if (p.userId === myUserId) return pid;
+    }
+    return null;
+  }, [state, myUserId]);
+
+  const myPid = useMemo(() => playerID ?? derivedPid, [playerID, derivedPid]);
+
   const myHand = useMemo(
-    () => (state && playerID ? state.players[playerID]?.hand ?? [] : []),
-    [state, playerID]
+    () => (state && myPid ? state.players[myPid]?.hand ?? [] : []),
+    [state, myPid]
   );
   const iAmFinished = useMemo(
-    () => !!state && !!playerID && state.finishedOrder.includes(playerID),
-    [state, playerID]
+    () => !!state && !!myPid && state.finishedOrder.includes(myPid),
+    [state, myPid]
   );
   const isMyTurn = useMemo(
-    () =>
-      !!state && !!playerID && state.currentPlayer === playerID && !iAmFinished,
-    [state, playerID, iAmFinished]
+    () => !!state && !!myPid && state.currentPlayer === myPid && !iAmFinished,
+    [state, myPid, iAmFinished]
   );
 
   const activeGlow = useMemo(() => {
@@ -623,6 +653,11 @@ const UnoGame: React.FC = () => {
       await gameMove.mutateAsync({ roomId: room.id, action: "callUno" });
     } catch {}
   }, [room, isMyTurn, gameMove]);
+
+  useEffect(() => {
+    setPickerOpen(false);
+    setPendingIndex(null);
+  }, [state?.turnStartTime]);
 
   if (phase === "setup") {
     return (
@@ -1073,7 +1108,8 @@ const UnoGame: React.FC = () => {
               <div className="hidden md:block">
                 <RoundTable
                   state={state}
-                  playerID={playerID}
+                  playerID={myPid}
+                  myUserId={myUserId}
                   activeGlow={activeGlow}
                 />
               </div>
@@ -1083,10 +1119,13 @@ const UnoGame: React.FC = () => {
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 items-start w-full">
                     <div className="space-y-3 sm:space-y-4">
                       {Object.entries(state.players)
-                        .filter(([pid]) => pid !== playerID)
+                        .filter(([, p]) => p.userId !== myUserId) // exclude myself by userId
                         .slice(
                           0,
-                          Math.ceil((Object.keys(state.players).length - 1) / 2)
+                          Math.ceil(
+                            Math.max(0, Object.keys(state.players).length - 1) /
+                              2
+                          )
                         )
                         .map(([pid, p]) => {
                           const isTurn = pid === state.currentPlayer;
@@ -1108,9 +1147,12 @@ const UnoGame: React.FC = () => {
 
                     <div className="space-y-3 sm:space-y-4">
                       {Object.entries(state.players)
-                        .filter(([pid]) => pid !== playerID)
+                        .filter(([, p]) => p.userId !== myUserId) // exclude myself by userId
                         .slice(
-                          Math.ceil((Object.keys(state.players).length - 1) / 2)
+                          Math.ceil(
+                            Math.max(0, Object.keys(state.players).length - 1) /
+                              2
+                          )
                         )
                         .map(([pid, p]) => {
                           const isTurn = pid === state.currentPlayer;
@@ -1133,11 +1175,11 @@ const UnoGame: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <Avatar
                       name={
-                        state.players[playerID!]?.username ||
+                        state.players[myPid!]?.username ||
                         (meQuery.data?.user?.username ?? "You")
                       }
                       src={
-                        state.players[playerID!]?.avatarUrl ||
+                        state.players[myPid!]?.avatarUrl ||
                         (meQuery.data?.user as any)?.profileImage ||
                         undefined
                       }
@@ -1542,8 +1584,9 @@ const CenterPiles: React.FC<{
 const RoundTable: React.FC<{
   state: UnoGameState;
   playerID: string | null;
+  myUserId?: string | null;
   activeGlow: string;
-}> = ({ state, playerID, activeGlow }) => {
+}> = ({ state, playerID, activeGlow, myUserId }) => {
   const tableRef = React.useRef<HTMLDivElement | null>(null);
   const centerRef = React.useRef<HTMLDivElement | null>(null);
   const [tableSize, setTableSize] = useState<{ w: number; h: number }>({
@@ -1583,16 +1626,25 @@ const RoundTable: React.FC<{
     );
 
   const opponents = useMemo(() => {
-    const entries = orderedEntries(state.players);
-    const playerIndex = entries.findIndex(([pid]) => pid === playerID);
+    const entriesAll = orderedEntries(state.players);
+    const entries = entriesAll.filter(([, p]) => p.userId !== myUserId);
 
-    const rotated = [
-      ...entries.slice(playerIndex + 1),
-      ...entries.slice(0, playerIndex),
+    if (!playerID) {
+      return entries;
+    }
+
+    const playerIndex = entriesAll.findIndex(([pid]) => pid === playerID);
+    if (playerIndex < 0) {
+      return entries;
+    }
+
+    const rotatedAll = [
+      ...entriesAll.slice(playerIndex + 1),
+      ...entriesAll.slice(0, playerIndex),
     ];
 
-    return rotated;
-  }, [state.players, playerID]);
+    return rotatedAll.filter(([, p]) => p.userId !== myUserId);
+  }, [state.players, playerID, myUserId]);
 
   const layout = useMemo(() => {
     const n = opponents.length;
