@@ -26,6 +26,7 @@ import { Spotify } from "react-spotify-embed";
 import ViewMoodEntry from "./viewmood";
 import clsx from "clsx";
 import { CharLimitInfo } from "./char_limit";
+import React from "react";
 
 const DEFAULT_ACTIVITIES = [
   "Exercise",
@@ -52,8 +53,6 @@ const MUSIC_PLATFORMS = [
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const CHAR_LIMIT = 20000;
-
-import React from "react";
 
 type OptimizedCheckboxProps = React.InputHTMLAttributes<HTMLInputElement> & {
   label?: React.ReactNode;
@@ -90,7 +89,6 @@ OptimizedCheckbox.displayName = "OptimizedCheckbox";
 
 const getValidUrl = (urlString: string): string | null => {
   if (!urlString || !urlString.trim()) return null;
-
   try {
     new URL(urlString);
     return urlString;
@@ -111,10 +109,8 @@ const getYouTubeEmbed = (raw: string): string | null => {
   try {
     const u = new URL(valid);
     const host = u.hostname.replace(/^www\./, "").toLowerCase();
-
     let v = u.searchParams.get("v") || "";
     const list = u.searchParams.get("list") || "";
-
     if (host === "youtu.be") {
       v = u.pathname.slice(1);
     } else if (host.endsWith("youtube.com") || host === "music.youtube.com") {
@@ -123,7 +119,6 @@ const getYouTubeEmbed = (raw: string): string | null => {
       if (!v && u.pathname.startsWith("/embed/"))
         v = u.pathname.split("/")[2] || "";
     }
-
     const t = u.searchParams.get("start") || u.searchParams.get("t") || "";
     const parseTime = (val: string) => {
       if (!val) return undefined;
@@ -136,14 +131,12 @@ const getYouTubeEmbed = (raw: string): string | null => {
       return h * 3600 + mm * 60 + s;
     };
     const start = parseTime(t);
-
     if (list && !v) {
       const qs = new URLSearchParams();
       qs.set("list", list);
       qs.set("rel", "0");
       return `https://www.youtube-nocookie.com/embed/videoseries?${qs.toString()}`;
     }
-
     if (v) {
       const qs = new URLSearchParams();
       qs.set("rel", "0");
@@ -176,26 +169,20 @@ const getAppleMusicEmbed = (raw: string): string | null => {
 const validateMusicUrl = (url: string, platform: string): boolean => {
   try {
     const parsedUrl = new URL(url);
-
     switch (platform) {
       case "spotify":
         return parsedUrl.hostname.includes("spotify.com");
-
       case "youtube":
         return (
           parsedUrl.hostname.includes("youtube.com") ||
           parsedUrl.hostname.includes("youtu.be")
         );
-
       case "youtubeMusic":
         return parsedUrl.hostname.includes("music.youtube.com");
-
       case "appleMusic":
         return parsedUrl.hostname.includes("music.apple.com");
-
       case "other":
         return true;
-
       default:
         return false;
     }
@@ -210,7 +197,6 @@ const extractTitleFromUrl = async (
 ): Promise<string> => {
   try {
     const parsedUrl = new URL(url);
-
     switch (platform) {
       case "spotify":
         if (parsedUrl.pathname.includes("/track/")) {
@@ -225,20 +211,17 @@ const extractTitleFromUrl = async (
                 return data.title || "Spotify Track";
               }
             } catch (err) {
-              console.log("Error fetching Spotify metadata:", err);
               return trackId.replace(/-/g, " ").replace(/_/g, " ");
             }
           }
           return "Spotify Track";
         }
         return "Spotify Music";
-
       case "youtube":
         const ytTitle =
           parsedUrl.searchParams.get("v") ||
           parsedUrl.pathname.replace("/", "") ||
           "YouTube Video";
-
         try {
           const response = await fetch(
             `https://noembed.com/embed?url=${encodeURIComponent(url)}`
@@ -247,15 +230,10 @@ const extractTitleFromUrl = async (
             const data = await response.json();
             return data.title || ytTitle;
           }
-        } catch (err) {
-          console.log("Error fetching YouTube metadata:", err);
-        }
-
+        } catch (err) {}
         return ytTitle;
-
       case "youtubeMusic":
         return "YouTube Music Track";
-
       case "appleMusic":
         if (parsedUrl.pathname.includes("/album/")) {
           const parts = parsedUrl.pathname.split("/");
@@ -265,13 +243,11 @@ const extractTitleFromUrl = async (
           }
         }
         return "Apple Music Track";
-
       default:
         const domain = parsedUrl.hostname.replace("www.", "").split(".")[0];
         return `${domain.charAt(0).toUpperCase() + domain.slice(1)} Music`;
     }
   } catch (e) {
-    console.error("Error extracting title:", e);
     return "Music";
   }
 };
@@ -302,7 +278,6 @@ async function uploadViaApi(file: File): Promise<{
 export default function MoodTrackerPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
-
   const [moodData, setMoodData] = useState({
     mood: 3,
     activities: [] as string[],
@@ -328,51 +303,47 @@ export default function MoodTrackerPage() {
         userId: string;
         notes: string;
         mediaIds: string[];
+        notesSynced?: boolean;
       }[],
       selectedCircles: [] as string[],
       circleCustomNotes: [] as {
         memberIds: string[];
         notes: string;
         mediaIds: string[];
+        notesSynced?: boolean;
       }[],
     },
   });
-
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [mediaError, setMediaError] = useState("");
   const [activeShareTab, setActiveShareTab] = useState<
     "connections" | "circles"
   >("connections");
-
   const [customizeConnections, setCustomizeConnections] = useState<Set<string>>(
     new Set()
   );
   const [customizeCircles, setCustomizeCircles] = useState<Set<string>>(
     new Set()
   );
-
   const [pendingClicks, setPendingClicks] = useState<Set<string>>(new Set());
   const [musicUrlError, setMusicUrlError] = useState<string>("");
   const [isValidatingUrl, setIsValidatingUrl] = useState<boolean>(false);
   const [shareMediaWithAll, setShareMediaWithAll] = useState<boolean>(false);
-
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  console.log("User timezone:", timezone);
-
   const currentUserQuery = trpc.auth.getCurrentUser.useQuery({
     fulluser: true,
   });
   const currentUser = currentUserQuery.data?.user;
   const isHost = currentUser?.UserRole === "host";
-  const connections = isHost
-    ? trpc.user.getAllUsers.useQuery(undefined, {
-        staleTime: 1000 * 60 * 5,
-      }).data?.users || []
-    : trpc.connection.getUserConnections.useQuery(undefined, {
-        staleTime: 1000 * 60 * 5,
-      }).data?.users || [];
-
+  const connections =
+    (isHost
+      ? trpc.user.getAllUsers.useQuery(undefined, {
+          staleTime: 1000 * 60 * 5,
+        }).data?.users
+      : trpc.connection.getUserConnections.useQuery(undefined, {
+          staleTime: 1000 * 60 * 5,
+        }).data?.users) || [];
   const microCirclesQuery = trpc.microCircle.getMicroCircles.useQuery(
     undefined,
     {
@@ -380,10 +351,8 @@ export default function MoodTrackerPage() {
     }
   );
   const microCircles = microCirclesQuery.data?.circles || [];
-
   const todayEntryQuery = trpc.mood.checkTodayEntry.useQuery({ timezone });
   const alreadySubmittedToday = todayEntryQuery.data?.hasSubmitted || false;
-
   const todayIso = useMemo(() => {
     const now = new Date();
     return now.toISOString();
@@ -392,27 +361,52 @@ export default function MoodTrackerPage() {
     { date: todayIso, timezone },
     { enabled: alreadySubmittedToday }
   );
-
   const isLoading = microCirclesQuery.isLoading;
 
   useEffect(() => {
     console.time("MoodTracker-Render");
-
     return () => {
       console.timeEnd("MoodTracker-Render");
     };
   }, []);
 
   useEffect(() => {
-    console.log("Connections data:", connections);
-
-    const handleClick = (e: MouseEvent) => {
-      console.log("Click detected at:", e.clientX, e.clientY);
-    };
-
+    const handleClick = (e: MouseEvent) => {};
     document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
   }, [connections]);
+
+  useEffect(() => {
+    setMoodData((prev) => {
+      const main = prev.notes ?? "";
+      let changed = false;
+      const syncedCustom = prev.sharing.customVersions.map((cv) => {
+        if (cv.notesSynced === false) return cv;
+        if (cv.notes !== main) {
+          changed = true;
+          return { ...cv, notes: main, notesSynced: true };
+        }
+        return cv;
+      });
+      const syncedCircles = prev.sharing.circleCustomNotes.map((cn) => {
+        if (cn.notesSynced === false) return cn;
+        if (cn.notes !== main) {
+          changed = true;
+          return { ...cn, notes: main, notesSynced: true };
+        }
+        return cn;
+      });
+      if (!changed) return prev;
+      return {
+        ...prev,
+        sharing: {
+          ...prev.sharing,
+          customVersions: syncedCustom,
+          circleCustomNotes: syncedCircles,
+        },
+      };
+    });
+  }, [moodData.notes]);
 
   const createMoodMutation = trpc.mood.createMood.useMutation({
     onSuccess: () => {
@@ -446,16 +440,13 @@ export default function MoodTrackerPage() {
 
   const toggleShareWithAll = useCallback(() => {
     setShareMediaWithAll((prev) => !prev);
-
     setMoodData((prev) => {
       const allMediaIds = prev.media.map((media) => media.id);
-
       const updatedCustomVersions = [...prev.sharing.customVersions];
       prev.sharing.selectedConnections.forEach((connId) => {
         const versionIndex = updatedCustomVersions.findIndex(
           (v) => v.userId === connId
         );
-
         if (versionIndex >= 0) {
           updatedCustomVersions[versionIndex] = {
             ...updatedCustomVersions[versionIndex],
@@ -466,15 +457,14 @@ export default function MoodTrackerPage() {
             userId: connId,
             notes: prev.notes,
             mediaIds: allMediaIds,
+            notesSynced: true,
           });
         }
       });
-
       const updatedCircleCustomNotes = [...prev.sharing.circleCustomNotes];
       prev.sharing.selectedCircles.forEach((circleId) => {
         const circle = microCircles.find((c) => c._id === circleId);
         if (!circle) return;
-
         const memberIds = circle.members.map((m: { _id: string }) => m._id);
         const noteIndex = updatedCircleCustomNotes.findIndex(
           (v) =>
@@ -482,7 +472,6 @@ export default function MoodTrackerPage() {
             v.memberIds.length === memberIds.length &&
             v.memberIds.every((id) => memberIds.includes(id))
         );
-
         if (noteIndex >= 0) {
           updatedCircleCustomNotes[noteIndex] = {
             ...updatedCircleCustomNotes[noteIndex],
@@ -493,10 +482,10 @@ export default function MoodTrackerPage() {
             memberIds,
             notes: prev.notes,
             mediaIds: allMediaIds,
+            notesSynced: true,
           });
         }
       });
-
       return {
         ...prev,
         sharing: {
@@ -512,9 +501,7 @@ export default function MoodTrackerPage() {
   const validateAndProcessMusicUrl = useCallback(
     (url: string, platform: string) => {
       setMusicUrlError("");
-
       if (!url.trim()) return;
-
       let validUrl = getValidUrl(url);
       if (!validUrl) {
         setMusicUrlError(
@@ -522,7 +509,6 @@ export default function MoodTrackerPage() {
         );
         return;
       }
-
       const isValidForPlatform = validateMusicUrl(validUrl, platform);
       if (!isValidForPlatform) {
         setMusicUrlError(
@@ -545,7 +531,6 @@ export default function MoodTrackerPage() {
           url: newUrl,
         },
       }));
-
       if (newUrl.trim() && !isValidatingUrl) {
         setIsValidatingUrl(true);
         setTimeout(() => {
@@ -561,9 +546,7 @@ export default function MoodTrackerPage() {
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (!files) return;
-
       setMediaError("");
-
       const oversizedFiles = Array.from(files).filter(
         (file) => file.size > MAX_FILE_SIZE
       );
@@ -573,11 +556,9 @@ export default function MoodTrackerPage() {
         );
         return;
       }
-
       const filesToProcess = Array.from(files).filter(
         (file) => file.size <= MAX_FILE_SIZE
       );
-
       const processFiles = async () => {
         const newMedia = await Promise.all(
           Array.from(filesToProcess).map(async (file) => ({
@@ -591,10 +572,8 @@ export default function MoodTrackerPage() {
             file,
           }))
         );
-
         setMoodData((prev) => {
           const updatedMedia = [...prev.media, ...newMedia];
-
           const updatedCustomVersions = prev.sharing.customVersions.map(
             (version) => {
               const newMediaIds = newMedia.map((media) => media.id);
@@ -604,7 +583,6 @@ export default function MoodTrackerPage() {
               };
             }
           );
-
           const updatedCircleCustomNotes = prev.sharing.circleCustomNotes.map(
             (circle) => {
               const newMediaIds = newMedia.map((media) => media.id);
@@ -614,7 +592,6 @@ export default function MoodTrackerPage() {
               };
             }
           );
-
           return {
             ...prev,
             media: updatedMedia,
@@ -626,14 +603,12 @@ export default function MoodTrackerPage() {
           };
         });
       };
-
       processFiles();
     },
     []
   );
 
   const toggleConnectionCustomize = useCallback((connectionId: string) => {
-    console.log("Toggle customize for connection:", connectionId);
     setCustomizeConnections((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(connectionId)) {
@@ -646,7 +621,6 @@ export default function MoodTrackerPage() {
   }, []);
 
   const toggleCircleCustomize = useCallback((circleId: string) => {
-    console.log("Toggle customize for circle:", circleId);
     setCustomizeCircles((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(circleId)) {
@@ -660,20 +634,15 @@ export default function MoodTrackerPage() {
 
   const toggleConnectionShare = useCallback(
     (connectionId: string) => {
-      console.log("Toggle connection clicked:", connectionId);
-
       setPendingClicks((prev) => {
         const newSet = new Set(prev);
         newSet.add(`conn-${connectionId}`);
         return newSet;
       });
-
       setMoodData((prev) => {
         const { selectedConnections } = prev.sharing;
         const isSelected = selectedConnections.includes(connectionId);
-
         let newSharing;
-
         if (isSelected) {
           newSharing = {
             ...prev.sharing,
@@ -684,7 +653,6 @@ export default function MoodTrackerPage() {
               (v) => v.userId !== connectionId
             ),
           };
-
           setCustomizeConnections((prevSet) => {
             const newSet = new Set(prevSet);
             newSet.delete(connectionId);
@@ -692,9 +660,6 @@ export default function MoodTrackerPage() {
           });
         } else {
           const allMediaIds = prev.media.map((media) => media.id);
-
-          console.log("Adding connection with media IDs:", allMediaIds);
-
           newSharing = {
             ...prev.sharing,
             selectedConnections: [...selectedConnections, connectionId],
@@ -704,11 +669,11 @@ export default function MoodTrackerPage() {
                 userId: connectionId,
                 notes: prev.notes,
                 mediaIds: allMediaIds,
+                notesSynced: true,
               },
             ],
           };
         }
-
         setTimeout(() => {
           setPendingClicks((prevClicks) => {
             const newSet = new Set(prevClicks);
@@ -716,7 +681,6 @@ export default function MoodTrackerPage() {
             return newSet;
           });
         }, 300);
-
         return {
           ...prev,
           sharing: newSharing,
@@ -733,14 +697,11 @@ export default function MoodTrackerPage() {
         newSet.add(`circle-${circleId}`);
         return newSet;
       });
-
       requestAnimationFrame(() => {
         setMoodData((prev) => {
           const { selectedCircles } = prev.sharing;
           const isSelected = selectedCircles.includes(circleId);
-
           let newSharing;
-
           if (isSelected) {
             newSharing = {
               ...prev.sharing,
@@ -760,7 +721,6 @@ export default function MoodTrackerPage() {
                 }
               ),
             };
-
             setCustomizeCircles((prevSet) => {
               const newSet = new Set(prevSet);
               newSet.delete(circleId);
@@ -769,12 +729,10 @@ export default function MoodTrackerPage() {
           } else {
             const allMediaIds = prev.media.map((media) => media.id);
             const circle = microCircles.find((c) => c._id === circleId);
-
             if (circle) {
               const memberIds = circle.members.map(
                 (m: { _id: string }) => m._id
               );
-
               newSharing = {
                 ...prev.sharing,
                 selectedCircles: [...selectedCircles, circleId],
@@ -784,6 +742,7 @@ export default function MoodTrackerPage() {
                     memberIds,
                     notes: prev.notes,
                     mediaIds: allMediaIds,
+                    notesSynced: true,
                   },
                 ],
               };
@@ -794,7 +753,6 @@ export default function MoodTrackerPage() {
               };
             }
           }
-
           setTimeout(() => {
             setPendingClicks((prev) => {
               const newSet = new Set(prev);
@@ -802,7 +760,6 @@ export default function MoodTrackerPage() {
               return newSet;
             });
           }, 300);
-
           return {
             ...prev,
             sharing: newSharing,
@@ -820,18 +777,14 @@ export default function MoodTrackerPage() {
         const existingVersionIndex = customVersions.findIndex(
           (v) => v.userId === connectionId
         );
-
         if (existingVersionIndex >= 0) {
           const currentVersion = customVersions[existingVersionIndex];
           const mediaId = prev.media[mediaIndex]?.id;
-
           if (!mediaId) return prev;
-
           const currentMediaIds = currentVersion.mediaIds || [];
           const newMediaIds = currentMediaIds.includes(mediaId)
             ? currentMediaIds.filter((id) => id !== mediaId)
             : [...currentMediaIds, mediaId];
-
           customVersions[existingVersionIndex] = {
             ...currentVersion,
             mediaIds: newMediaIds,
@@ -839,16 +792,14 @@ export default function MoodTrackerPage() {
         } else {
           const notes = prev.notes;
           const mediaId = prev.media[mediaIndex]?.id;
-
           if (!mediaId) return prev;
-
           customVersions.push({
             userId: connectionId,
             notes,
             mediaIds: [mediaId],
+            notesSynced: true,
           });
         }
-
         return {
           ...prev,
           sharing: {
@@ -860,6 +811,7 @@ export default function MoodTrackerPage() {
     },
     []
   );
+
   const toggleCircleMediaSelection = useCallback(
     (circleId: string, mediaIndex: number) => {
       setMoodData((prev) => {
@@ -867,9 +819,7 @@ export default function MoodTrackerPage() {
         if (!circle) return prev;
         const memberIds = circle.members.map((m: { _id: string }) => m._id);
         const mediaId = prev.media[mediaIndex]?.id;
-
         if (!mediaId) return prev;
-
         const circleCustomNotes = [...prev.sharing.circleCustomNotes];
         const existingNoteIndex = circleCustomNotes.findIndex(
           (v) =>
@@ -877,15 +827,12 @@ export default function MoodTrackerPage() {
             v.memberIds.length === memberIds.length &&
             v.memberIds.every((id) => memberIds.includes(id))
         );
-
         if (existingNoteIndex >= 0) {
           const currentVersion = circleCustomNotes[existingNoteIndex];
           const currentMediaIds = currentVersion.mediaIds || [];
-
           const newMediaIds = currentMediaIds.includes(mediaId)
             ? currentMediaIds.filter((id) => id !== mediaId)
             : [...currentMediaIds, mediaId];
-
           circleCustomNotes[existingNoteIndex] = {
             ...currentVersion,
             mediaIds: newMediaIds,
@@ -896,9 +843,9 @@ export default function MoodTrackerPage() {
             memberIds,
             notes,
             mediaIds: [mediaId],
+            notesSynced: true,
           });
         }
-
         return {
           ...prev,
           sharing: {
@@ -910,6 +857,7 @@ export default function MoodTrackerPage() {
     },
     [microCircles]
   );
+
   const updateCustomVersion = useCallback(
     (connectionId: string, notes: string) => {
       setMoodData((prev) => {
@@ -917,20 +865,21 @@ export default function MoodTrackerPage() {
         const existingVersionIndex = customVersions.findIndex(
           (v) => v.userId === connectionId
         );
-
         if (existingVersionIndex >= 0) {
+          const inSync = notes === prev.notes;
           customVersions[existingVersionIndex] = {
             ...customVersions[existingVersionIndex],
             notes,
+            notesSynced: inSync ? true : false,
           };
         } else {
           customVersions.push({
             userId: connectionId,
             notes,
             mediaIds: [],
+            notesSynced: notes === prev.notes,
           });
         }
-
         return {
           ...prev,
           sharing: {
@@ -949,7 +898,6 @@ export default function MoodTrackerPage() {
         const circle = microCircles.find((c) => c._id === circleId);
         if (!circle) return prev;
         const memberIds = circle.members.map((m: { _id: string }) => m._id);
-
         const circleCustomNotes = [...prev.sharing.circleCustomNotes];
         const existingNoteIndex = circleCustomNotes.findIndex(
           (v) =>
@@ -957,20 +905,21 @@ export default function MoodTrackerPage() {
             v.memberIds.length === memberIds.length &&
             v.memberIds.every((id) => memberIds.includes(id))
         );
-
         if (existingNoteIndex >= 0) {
+          const inSync = notes === prev.notes;
           circleCustomNotes[existingNoteIndex] = {
             ...circleCustomNotes[existingNoteIndex],
             notes,
+            notesSynced: inSync ? true : false,
           };
         } else {
           circleCustomNotes.push({
             memberIds,
             notes,
             mediaIds: [],
+            notesSynced: notes === prev.notes,
           });
         }
-
         return {
           ...prev,
           sharing: {
@@ -997,11 +946,9 @@ export default function MoodTrackerPage() {
         );
         return;
       }
-
       const uploaded = await Promise.all(
         mediaNeedingUpload.map((m) => uploadViaApi(m.file!))
       );
-
       const uploadedMap = new Map<
         string,
         { url: string; type: "image" | "video"; publicId: string }
@@ -1014,7 +961,6 @@ export default function MoodTrackerPage() {
           publicId: u.public_id,
         });
       });
-
       const existingCloudinaryMedia = moodData.media
         .map((m) => {
           const up = uploadedMap.get(m.id);
@@ -1034,7 +980,6 @@ export default function MoodTrackerPage() {
             publicId: string;
           } => !!x && typeof x.publicId === "string" && x.publicId.length > 0
         );
-
       const musicData = { ...moodData.music };
       if (musicData.url) {
         const validUrl = getValidUrl(musicData.url);
@@ -1054,14 +999,17 @@ export default function MoodTrackerPage() {
           musicData.url = "";
         }
       }
-
       const sharingData = {
         isPrivate: moodData.sharing.isPrivate,
         sharedWith: moodData.sharing.selectedConnections,
         mediaIdToIndexMap: {},
         existingCloudinaryMedia,
         customVersions: moodData.sharing.customVersions.map(
-          ({ userId, notes, mediaIds = [] }) => ({ userId, notes, mediaIds })
+          ({ userId, notes, mediaIds = [] }) => ({
+            userId,
+            notes,
+            mediaIds,
+          })
         ),
         sharedWithCircles: moodData.sharing.selectedCircles.map((circleId) => {
           const customNotes = moodData.sharing.circleCustomNotes.find(
@@ -1078,7 +1026,6 @@ export default function MoodTrackerPage() {
               );
             }
           );
-
           return {
             circleId,
             customNotes: customNotes?.notes,
@@ -1086,7 +1033,6 @@ export default function MoodTrackerPage() {
           };
         }),
       };
-
       await createMoodMutation.mutateAsync({
         mood: moodData.mood,
         activities: moodData.activities,
@@ -1100,7 +1046,6 @@ export default function MoodTrackerPage() {
         },
         timezone: timezone,
       });
-
       window.location.reload();
     } catch (error: any) {
       console.error("Error submitting mood data:", error);
@@ -1117,7 +1062,6 @@ export default function MoodTrackerPage() {
     platform: string;
   }) => {
     const safeUrl = useMemo(() => getValidUrl(url), [url]);
-
     if (!safeUrl) {
       return (
         <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -1130,13 +1074,10 @@ export default function MoodTrackerPage() {
         </div>
       );
     }
-
     const p = (platform || "").toLowerCase();
-
     if (p === "spotify") {
       return <Spotify link={safeUrl} />;
     }
-
     if (p === "youtube" || p === "youtubemusic" || p.includes("youtube")) {
       const src = getYouTubeEmbed(safeUrl);
       return src ? (
@@ -1157,7 +1098,6 @@ export default function MoodTrackerPage() {
         </div>
       );
     }
-
     if (p === "applemusic" || p.includes("apple")) {
       const src = getAppleMusicEmbed(safeUrl);
       return src ? (
@@ -1177,7 +1117,6 @@ export default function MoodTrackerPage() {
         </div>
       );
     }
-
     return (
       <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
         <p className="text-blue-600 font-medium">Link added</p>
@@ -1205,14 +1144,6 @@ export default function MoodTrackerPage() {
 
   if (alreadySubmittedToday) {
     let todayMood = todayMoodQuery.data?.entry;
-    console.log("Today's mood data structure check:", {
-      mood: todayMood?.mood,
-      hasActivities: Array.isArray(todayMood?.activities),
-      activitiesLength: todayMood?.activities?.length,
-      hasNotes: Boolean(todayMood?.notes),
-      hasMedia: Array.isArray(todayMood?.media) && todayMood?.media.length > 0,
-    });
-
     return (
       <ViewMoodEntry
         moodEntry={
@@ -1302,7 +1233,6 @@ export default function MoodTrackerPage() {
 
         <div className="flex-1 overflow-y-auto overflow-x-hidden">
           <div className="p-4 sm:p-6 md:p-8 pb-24 sm:pb-6">
-            {" "}
             <div className="mb-6 sm:mb-8">
               <div className="flex justify-between items-center">
                 {[1, 2, 3].map((stepNum) => (
@@ -1756,10 +1686,7 @@ export default function MoodTrackerPage() {
 
                             {isLoading ? (
                               <div className="text-center p-4 bg-blue-50 rounded-lg">
-                                <div
-                                  className="inline-block animate-spin h-5 w-5 border-2 border-blue-600 
-                      border-t-transparent rounded-full mr-2"
-                                ></div>
+                                <div className="inline-block animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full mr-2"></div>
                                 Loading connections...
                               </div>
                             ) : connections.length === 0 ? (
@@ -1972,13 +1899,11 @@ export default function MoodTrackerPage() {
                                             moodData.sharing.customVersions.find(
                                               (v) => v.userId === connection._id
                                             );
-
                                           const mediaIds =
                                             customVersion?.mediaIds || [];
                                           const isSelected = mediaIds.includes(
                                             media.id
                                           );
-
                                           return (
                                             <div
                                               key={idx}
@@ -2051,7 +1976,6 @@ export default function MoodTrackerPage() {
                                     <label className="block text-sm text-blue-700 mb-1">
                                       Custom message for this circle
                                     </label>
-
                                     {(() => {
                                       const memberIds = circle.members.map(
                                         (m: { _id: string }) => m._id
@@ -2066,7 +1990,6 @@ export default function MoodTrackerPage() {
                                               memberIds.includes(id)
                                             )
                                         );
-
                                       return (
                                         <>
                                           <textarea
@@ -2118,7 +2041,6 @@ export default function MoodTrackerPage() {
                                             );
                                           const selectedMediaIds =
                                             customCircleVersion?.mediaIds || [];
-
                                           return (
                                             <label
                                               key={idx}
@@ -2127,7 +2049,7 @@ export default function MoodTrackerPage() {
                                               <input
                                                 type="checkbox"
                                                 checked={selectedMediaIds.includes(
-                                                  media.url
+                                                  media.id
                                                 )}
                                                 onChange={() =>
                                                   toggleCircleMediaSelection(
